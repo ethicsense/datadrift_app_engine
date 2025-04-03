@@ -1,18 +1,47 @@
-#!/usr/bin/env python3
+#!/Users/bhc/opt/anaconda3/envs/datadoctor/bin/python
 
 import argparse
 import os
+from PIL import Image
+from skimage import io, filters, img_as_float
+import numpy as np
 
 def analyze_images(directories, formats):
+
     for directory in directories:
         print(f"Analyzing images in directory: {directory}")
-        print(f"Formats: {formats}")
-        # 예시: 디렉토리 내의 파일을 순회하며 포맷에 맞는 파일을 찾기
+
         for root, _, files in os.walk(directory):
             for file in files:
                 if file.endswith(tuple(formats)):
-                    print(f"Found image: {file}")
-                    # 이미지 분석 코드 추가
+                    file_path = os.path.join(root, file)
+
+                    try:
+                        with Image.open(file_path) as img:
+                            # 기본 메타데이터
+                            file_name = file
+                            file_size = os.path.getsize(file_path)
+                            image_format = img.format
+                            width, height = img.size
+                            resolution = f"{width}x{height}"
+
+                            # 이미지 데이터 분석
+                            image_array = img_as_float(io.imread(file_path, as_gray=True))
+                            noise_level = np.std(image_array)
+                            sharpness = filters.sobel(image_array).mean()
+
+                            # 결과 출력
+                            print(f"Image Name: {file_name}")
+                            print(f"Path: {file_path}")
+                            print(f"Size: {file_size} bytes")
+                            print(f"Format: {image_format}")
+                            print(f"Resolution: {resolution}")
+                            print(f"Noise Level: {noise_level:.4f}")
+                            print(f"Sharpness: {sharpness:.4f}")
+                            print("-" * 40)
+
+                    except Exception as e:
+                        print(f"Error processing {file_path}: {e}")
 
 def create_report(directory):
     pass
