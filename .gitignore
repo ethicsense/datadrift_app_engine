@@ -21,6 +21,7 @@ models/
 # ignore datasets
 datasets/
 tlpdr3/
+datadoctor/test_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
