@@ -2,13 +2,20 @@
 
 import torch
 import clip
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
+from yellowbrick.cluster import KElbowVisualizer
 
 from PIL import Image
+import matplotlib.pyplot as plt
+import seaborn as sns
 from skimage import io, filters, img_as_float
 import json
 
 import numpy as np
 import hashlib
+import random
 
 import argparse
 import os
@@ -22,7 +29,10 @@ def calculate_hash(file_path):
     return hasher.hexdigest()
 
 def load_cache(directory):
-    cache_file = os.path.join(directory, 'data_cache.json')
+    save_path = os.path.join(directory, 'logs')
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    cache_file = os.path.join(save_path, 'data_cache.json')
     if os.path.exists(cache_file):
         with open(cache_file, 'r') as f:
             return json.load(f)
@@ -30,7 +40,10 @@ def load_cache(directory):
     return {}
 
 def save_cache(directory, cache):
-    cache_file = os.path.join(directory, 'data_cache.json')
+    save_path = os.path.join(directory, 'logs')
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    cache_file = os.path.join(save_path, 'data_cache.json')
     with open(cache_file, 'w') as f:
         json.dump(cache, f, indent=4)
 
@@ -53,7 +66,6 @@ def analyze_images(directories, formats):
 
                     if file_path in cache and cache[file_path]['hash'] == file_hash:
                         print(f"Skipping unchanged file: {file_path}")
-                        new_cache[file_path] = cache[file_path]
                         continue
 
                     try:
@@ -87,16 +99,175 @@ def analyze_images(directories, formats):
                                 'sharpness': sharpness,
                                 'embedding': embedding.tolist()
                             }
-
                             print(f"Processed {file_name}")
 
                     except Exception as e:
                         print(f"Error processing {file_path}: {e}")
 
-        save_cache(directory, new_cache)
+    cache.update(new_cache)
+    save_cache(directory, cache)
 
-def create_report(directory):
-    pass
+def create_report(directory, mode):
+    cache = load_cache(directory)
+    
+    if not cache:
+        print("No data found in cache.")
+        return
+    
+    # 임베딩 벡터 수집
+    embeddings = []
+    file_paths = []
+    for file_name, data in cache.items():
+        embeddings.append(data['embedding'])
+        file_paths.append(data['path'])
+    
+    # 임베딩 벡터 분포 시각화
+    flattened_embeddings = np.concatenate(embeddings)
+    
+    # 클러스터링
+    embeddings_array = np.array(embeddings)
+    pca = PCA(n_components=2)
+    reduced_embeddings = pca.fit_transform(embeddings_array)
+
+    # 자동으로 최적의 클러스터 수 결정
+    model = KMeans(random_state=42)
+    visualizer = KElbowVisualizer(model, k=(1, 10))
+    visualizer.fit(reduced_embeddings)
+    num_clusters = visualizer.elbow_value_
+
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    labels = kmeans.fit_predict(reduced_embeddings)
+
+    # 유사도 히트맵
+    similarity_matrix = cosine_similarity(embeddings_array)
+
+    # 유사도가 0.8 이상인 이미지 쌍 중 최대 3쌍 선택
+    threshold = 0.8
+    similar_pairs = []
+
+    for i in range(len(similarity_matrix)):
+        for j in range(i + 1, len(similarity_matrix)):
+            if similarity_matrix[i, j] >= threshold:
+                similar_pairs.append((i, j, similarity_matrix[i, j]))
+                if len(similar_pairs) == 3:
+                    break
+        if len(similar_pairs) == 3:
+            break
+    
+    save_path = os.path.join(directory, 'logs')
+    # Streamlit 모드
+    if mode == 'streamlit':
+        import streamlit as st
+        st.title("Image Data Analysis Report")
+        
+        for file_name, data in cache.items():
+            st.write(f"**File Name:** {file_name}")
+            st.write(f"**Path:** {data['path']}")
+            st.write(f"**Size:** {data['size']} bytes")
+            st.write(f"**Format:** {data['format']}")
+            st.write(f"**Resolution:** {data['resolution']}")
+            st.write(f"**Noise Level:** {data['noise_level']:.2f}")
+            st.write(f"**Sharpness:** {data['sharpness']:.2f}")
+            st.write("---")
+        
+        st.subheader("Embedding Vector Distribution")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(flattened_embeddings, bins=50, color='blue', alpha=0.7, kde=True, ax=ax)
+        ax.set_title('Embedding Vector Distribution with KDE')
+        ax.set_xlabel('Value')
+        ax.set_ylabel('Frequency')
+        ax.grid(True)
+        st.pyplot(fig)
+
+        st.subheader("Clustering Results")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for i in range(num_clusters):
+            cluster_points = reduced_embeddings[labels == i]
+            ax.scatter(cluster_points[:, 0], cluster_points[:, 1], label=f'Cluster {i}')
+        ax.set_title('2D Scatter Plot of Clustering Results')
+        ax.set_xlabel('Component 1')
+        ax.set_ylabel('Component 2')
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
+
+        st.subheader("Similarity Heatmap")
+        fig, ax = plt.subplots(figsize=(12, 10))
+        sns.heatmap(similarity_matrix, cmap='viridis', cbar=True, annot=True, fmt=".2f", linewidths=0.5, ax=ax)
+        ax.set_title('Detailed Heatmap of Image Similarities')
+        ax.set_xlabel('Image Index')
+        ax.set_ylabel('Image Index')
+        st.pyplot(fig)
+
+        st.subheader("Similar Image Pairs")
+        for pair in similar_pairs:
+            idx1, idx2, sim = pair
+            st.write(f"**Image {idx1} and Image {idx2} have similarity: {sim:.2f}**")
+            
+            img1 = Image.open(file_paths[idx1])
+            img2 = Image.open(file_paths[idx2])
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.image(img1, caption=f"Image {idx1}", use_column_width=True)
+            with col2:
+                st.image(img2, caption=f"Image {idx2}", use_column_width=True)
+
+    # PDF 모드
+    elif mode == 'pdf':
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        for file_name, data in cache.items():
+            pdf.cell(200, 10, txt=f"File Name: {file_name}", ln=True)
+            pdf.cell(200, 10, txt=f"Path: {data['path']}", ln=True)
+            pdf.cell(200, 10, txt=f"Size: {data['size']} bytes", ln=True)
+            pdf.cell(200, 10, txt=f"Format: {data['format']}", ln=True)
+            pdf.cell(200, 10, txt=f"Resolution: {data['resolution']}", ln=True)
+            pdf.cell(200, 10, txt=f"Noise Level: {data['noise_level']:.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Sharpness: {data['sharpness']:.2f}", ln=True)
+            pdf.cell(200, 10, txt="---", ln=True)
+
+        # 그래프 저장 및 PDF에 삽입
+        def save_and_insert_plot(pdf, fig, title):
+            image_path = os.path.join(save_path, f"{title}.png")
+            fig.savefig(image_path, bbox_inches='tight')
+            pdf.add_page()
+            pdf.image(image_path, x=10, y=10, w=180)
+            os.remove(image_path)
+
+        # 임베딩 벡터 분포 그래프
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(flattened_embeddings, bins=50, color='blue', alpha=0.7, kde=True, ax=ax)
+        ax.set_title('Embedding Vector Distribution with KDE')
+        ax.set_xlabel('Value')
+        ax.set_ylabel('Frequency')
+        ax.grid(True)
+        save_and_insert_plot(pdf, fig, "Embedding_Vector_Distribution")
+
+        # 클러스터링 결과 그래프
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for i in range(num_clusters):
+            cluster_points = reduced_embeddings[labels == i]
+            ax.scatter(cluster_points[:, 0], cluster_points[:, 1], label=f'Cluster {i}')
+        ax.set_title('2D Scatter Plot of Clustering Results')
+        ax.set_xlabel('Component 1')
+        ax.set_ylabel('Component 2')
+        ax.legend()
+        ax.grid(True)
+        save_and_insert_plot(pdf, fig, "Clustering_Results")
+
+        # 유사도 히트맵 그래프
+        fig, ax = plt.subplots(figsize=(12, 10))
+        sns.heatmap(similarity_matrix, cmap='viridis', cbar=True, annot=True, fmt=".2f", linewidths=0.5, ax=ax)
+        ax.set_title('Detailed Heatmap of Image Similarities')
+        ax.set_xlabel('Image Index')
+        ax.set_ylabel('Image Index')
+        save_and_insert_plot(pdf, fig, "Similarity_Heatmap")
+
+        # PDF 저장
+        pdf.output(os.path.join(save_path, "report.pdf"))
 
 def compare_datasets(directories):
     print(f"Comparing datasets in directories: {directories}")
@@ -130,6 +301,7 @@ def main():
     # Report sub-command
     parser_report = subparsers.add_parser('report', help='Create a report for a directory.')
     parser_report.add_argument('directory', help='Directory to create a report for.')
+    parser_report.add_argument('--mode', choices=['streamlit', 'pdf'], default='streamlit', help='Mode to generate report: streamlit or pdf.')
 
     args, unknown = parser.parse_known_args()
 
