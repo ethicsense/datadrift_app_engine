@@ -1,3 +1,6 @@
+# ignore fonts
+**/fonts/
+
 # ignore DB
 db/
 
