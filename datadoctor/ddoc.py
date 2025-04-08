@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from skimage import io, filters, img_as_float
 import json
+from fpdf import FPDF
 
 import numpy as np
 import hashlib
@@ -19,6 +20,7 @@ import random
 
 import argparse
 import os
+import subprocess
 
 def calculate_hash(file_path):
     hasher = hashlib.md5()
@@ -64,7 +66,7 @@ def analyze_images(directories, formats):
                     file_path = os.path.join(root, file)
                     file_hash = calculate_hash(file_path)
 
-                    if file_path in cache and cache[file_path]['hash'] == file_hash:
+                    if file in cache and cache[file]['hash'] == file_hash:
                         print(f"Skipping unchanged file: {file_path}")
                         continue
 
@@ -77,8 +79,8 @@ def analyze_images(directories, formats):
                                 embedding = model.encode_image(input).cpu().numpy().flatten()
 
                             # 기본 메타데이터
-                            file_name = file
-                            file_size = os.path.getsize(file_path)
+                            file_size_bytes = os.path.getsize(file_path)
+                            file_size_mb = file_size_bytes / (1024 * 1024)  # Convert to MB
                             image_format = img.format
                             width, height = img.size
                             resolution = f"{width}x{height}"
@@ -89,17 +91,17 @@ def analyze_images(directories, formats):
                             sharpness = filters.sobel(image_array).mean()
 
                             # 결과 저장
-                            new_cache[file_name] = {
+                            new_cache[file] = {
                                 'hash': file_hash,
                                 'path': os.path.abspath(file_path),
-                                'size': file_size,
+                                'size': file_size_mb,
                                 'format': image_format,
                                 'resolution': resolution,
                                 'noise_level': noise_level,
                                 'sharpness': sharpness,
                                 'embedding': embedding.tolist()
                             }
-                            print(f"Processed {file_name}")
+                            print(f"Processed {file}")
 
                     except Exception as e:
                         print(f"Error processing {file_path}: {e}")
@@ -157,67 +159,14 @@ def create_report(directory, mode):
     save_path = os.path.join(directory, 'logs')
     # Streamlit 모드
     if mode == 'streamlit':
-        import streamlit as st
-        st.title("Image Data Analysis Report")
-        
-        for file_name, data in cache.items():
-            st.write(f"**File Name:** {file_name}")
-            st.write(f"**Path:** {data['path']}")
-            st.write(f"**Size:** {data['size']} bytes")
-            st.write(f"**Format:** {data['format']}")
-            st.write(f"**Resolution:** {data['resolution']}")
-            st.write(f"**Noise Level:** {data['noise_level']:.2f}")
-            st.write(f"**Sharpness:** {data['sharpness']:.2f}")
-            st.write("---")
-        
-        st.subheader("Embedding Vector Distribution")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.histplot(flattened_embeddings, bins=50, color='blue', alpha=0.7, kde=True, ax=ax)
-        ax.set_title('Embedding Vector Distribution with KDE')
-        ax.set_xlabel('Value')
-        ax.set_ylabel('Frequency')
-        ax.grid(True)
-        st.pyplot(fig)
-
-        st.subheader("Clustering Results")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        for i in range(num_clusters):
-            cluster_points = reduced_embeddings[labels == i]
-            ax.scatter(cluster_points[:, 0], cluster_points[:, 1], label=f'Cluster {i}')
-        ax.set_title('2D Scatter Plot of Clustering Results')
-        ax.set_xlabel('Component 1')
-        ax.set_ylabel('Component 2')
-        ax.legend()
-        ax.grid(True)
-        st.pyplot(fig)
-
-        st.subheader("Similarity Heatmap")
-        fig, ax = plt.subplots(figsize=(12, 10))
-        sns.heatmap(similarity_matrix, cmap='viridis', cbar=True, annot=True, fmt=".2f", linewidths=0.5, ax=ax)
-        ax.set_title('Detailed Heatmap of Image Similarities')
-        ax.set_xlabel('Image Index')
-        ax.set_ylabel('Image Index')
-        st.pyplot(fig)
-
-        st.subheader("Similar Image Pairs")
-        for pair in similar_pairs:
-            idx1, idx2, sim = pair
-            st.write(f"**Image {idx1} and Image {idx2} have similarity: {sim:.2f}**")
-            
-            img1 = Image.open(file_paths[idx1])
-            img2 = Image.open(file_paths[idx2])
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(img1, caption=f"Image {idx1}", use_column_width=True)
-            with col2:
-                st.image(img2, caption=f"Image {idx2}", use_column_width=True)
+        subprocess.run(["streamlit", "run", "streamlit_app.py", "--", directory])
 
     # PDF 모드
     elif mode == 'pdf':
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", size=12)
+        pdf.add_font("NotoSans", "", "fonts/NotoSansKR-Regular.ttf", uni=True)
+        pdf.set_font("NotoSans", size=12)
         
         for file_name, data in cache.items():
             pdf.cell(200, 10, txt=f"File Name: {file_name}", ln=True)
@@ -326,7 +275,7 @@ def main():
     elif args.command == 'compare':
         compare_datasets(args.directories)
     elif args.command == 'report':
-        create_report(args.directory)
+        create_report(args.directory, args.mode)
 
 
 if __name__ == '__main__':
