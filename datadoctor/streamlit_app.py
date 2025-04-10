@@ -105,7 +105,7 @@ def run_streamlit_app(directory):
 
     st.subheader("Similarity Heatmap")
     fig, ax = plt.subplots(figsize=(12, 10))
-    sns.heatmap(similarity_matrix, cmap='viridis', cbar=True, annot=True, fmt=".2f", linewidths=0.5, ax=ax)
+    sns.heatmap(similarity_matrix, cmap='viridis', cbar=True, annot=False, fmt=".2f", linewidths=0.5, ax=ax)
     ax.set_title('Detailed Heatmap of Image Similarities')
     ax.set_xlabel('Image Index')
     ax.set_ylabel('Image Index')
@@ -121,9 +121,9 @@ def run_streamlit_app(directory):
         
         col1, col2 = st.columns(2)
         with col1:
-            st.image(img1, caption=f"Image {idx1}", use_column_width=True)
+            st.image(img1, caption=f"Image {idx1}", use_container_width=True)
         with col2:
-            st.image(img2, caption=f"Image {idx2}", use_column_width=True)
+            st.image(img2, caption=f"Image {idx2}", use_container_width=True)
 
 if __name__ == "__main__":
     run_streamlit_app(sys.argv[1])
