@@ -56,9 +56,16 @@ def analyze_images(directories, formats):
     model, preprocess = clip.load("ViT-B/16", device=device)
 
     for directory in directories:
-        print(f"Analyzing images in directory: {directory}")
+        print(f"\nAnalyzing images in directory: {directory}\n")
         cache = load_cache(directory)
         new_cache = {}
+        format_count = 0
+
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.endswith(tuple(formats)):
+                    format_count += 1
+        print(f"Found {format_count} datas in {directory}\n")
 
         for root, _, files in os.walk(directory):
             for file in files:
@@ -106,8 +113,9 @@ def analyze_images(directories, formats):
                     except Exception as e:
                         print(f"Error processing {file_path}: {e}")
 
-    cache.update(new_cache)
-    save_cache(directory, cache)
+        cache.update(new_cache)
+        save_cache(directory, cache)
+        print(f"\nSaved cache to {directory}")
 
 def create_report(directory, mode):
     cache = load_cache(directory)
@@ -219,11 +227,11 @@ def create_report(directory, mode):
         pdf.output(os.path.join(save_path, "report.pdf"))
 
 def compare_datasets(directories):
-    print(f"Comparing datasets in directories: {directories}")
+    print(f"\nComparing datasets in directories: {directories}\n")
     # 데이터셋 비교 로직을 여기에 추가하세요.
     # 예시: 각 디렉토리의 파일 목록을 비교
     for directory in directories:
-        print(f"Analyzing directory: {directory}")
+        print(f"\nAnalyzing directory: {directory}\n")
         # 디렉토리 내 파일 목록 출력
         for root, _, files in os.walk(directory):
             for file in files:
@@ -240,8 +248,8 @@ def main():
 
     # Analysis sub-command
     parser_analysis = subparsers.add_parser('analysis', help='Analyze images in directories.')
-    parser_analysis.add_argument('directories', nargs='+', help='Directories to analyze.')
-    parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include.')
+    parser_analysis.add_argument('directories', nargs='+', help='Directory to analyze.')
+    parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
 
     # Compare sub-command
     parser_compare = subparsers.add_parser('compare', help='Compare datasets in directories.')
