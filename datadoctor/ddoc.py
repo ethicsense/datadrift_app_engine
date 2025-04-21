@@ -425,16 +425,19 @@ def main():
 
     # Analysis sub-command
     parser_analysis = subparsers.add_parser('analysis', help='Analyze images in directories.')
+    parser_analysis.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_analysis.add_argument('directories', nargs='+', help='Directory to analyze.')
     parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
 
     # Compare sub-command
     parser_compare = subparsers.add_parser('compare', help='Compare datasets in directories.')
+    parser_compare.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_compare.add_argument('directories', nargs='+', help='Directories to compare.')
     parser_compare.add_argument('--mode', choices=['streamlit', 'pdf'], default='streamlit', help='Mode to generate report: streamlit or pdf.')
 
     # Report sub-command
     parser_report = subparsers.add_parser('report', help='Create a report for a directory.')
+    parser_report.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_report.add_argument('directory', help='Directory to create a report for.')
     parser_report.add_argument('--mode', choices=['streamlit', 'pdf'], default='streamlit', help='Mode to generate report: streamlit or pdf.')
 
@@ -457,10 +460,28 @@ def main():
         return
 
     if args.command == 'analysis':
+        if args.root:
+            if not args.directories:
+                # If only -r is provided, analyze all subdirectories
+                args.directories = [os.path.join(args.root, d) for d in os.listdir(args.root) if os.path.isdir(os.path.join(args.root, d))]
+            else:
+                # Combine -r with directories
+                args.directories = [os.path.join(args.root, d) for d in args.directories]
         analyze_images(args.directories, args.format)
+
     elif args.command == 'compare':
+        if args.root:
+            if not args.directories:
+                # If only -r is provided, analyze all subdirectories
+                args.directories = [os.path.join(args.root, d) for d in os.listdir(args.root) if os.path.isdir(os.path.join(args.root, d))]
+            else:
+                # Combine -r with directories
+                args.directories = [os.path.join(args.root, d) for d in args.directories]
         compare_datasets(args.directories, args.mode)
+
     elif args.command == 'report':
+        if args.root:
+            args.directory = os.path.join(args.root, args.directory)
         create_report(args.directory, args.mode)
 
 
