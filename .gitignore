@@ -17,6 +17,8 @@ deep_text_recognition_benchmark
 **/logs/
 runs/
 *.pt
+*.pth
+*.pth.tar
 
 # ignore model files
 models/
