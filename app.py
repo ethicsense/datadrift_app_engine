@@ -649,6 +649,20 @@ def stream_logs():
 
     return Response(generate(), mimetype='text/event-stream')
 
+
+@app.route('/camvis/upload_page')
+def cam_upload():
+    models = [m for m in os.listdir('./models')]
+    return render_template('camupload.html', models=models)
+
+
+
+
+
+
+
+
+
 # @socketio.on('check_fiftyone_ready')
 # def handle_check_fiftyone_ready():
 #     # FiftyOne 세션이 준비되었는지 확인하는 로직을 추가하세요.
