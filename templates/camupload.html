@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAM Visualization Upload</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .form-container { padding: 20px; }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+        }
+        .settings-row { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="mb-4">CAM Visualization Settings</h2>
+        
+        <!-- 모델 설정 행 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Model Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <!-- 모델 선택 -->
+                    <div class="col">
+                        <label for="modelSelect" class="form-label">Select Model</label>
+                        <select class="form-select" id="modelSelect" required>
+                            <option value="">Choose a model...</option>
+                            {% for model in models %}
+                            <option value="{{ model }}">{{ model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Target Layer -->
+                    <div class="col">
+                        <label for="targetLayer" class="form-label">Target Layer</label>
+                        <input type="number" class="form-control" id="targetLayer" 
+                               min="2" max="20" value="2" required>
+                    </div>
+
+                    <!-- GPU 사용 여부 -->
+                    <div class="col">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="useGpu" checked>
+                            <label class="form-check-label" for="useGpu">Use GPU</label>
+                        </div>
+                    </div>
+
+                    <!-- Input Type 선택 -->
+                    <div class="col">
+                        <label class="form-label">Input Type</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="inputType" id="typeImage" value="image" checked>
+                            <label class="btn btn-outline-primary" for="typeImage">Image</label>
+
+                            <input type="radio" class="btn-check" name="inputType" id="typeText" value="text">
+                            <label class="btn btn-outline-primary" for="typeText">Text</label>
+                        </div>
+                    </div>
+
+                    <!-- 모델 업로드 버튼 -->
+                    <div class="col">
+                        <button type="button" class="btn btn-success" onclick="showSettings()">
+                            Configure Input
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 이미지 설정 행 (기본적으로 숨김) -->
+        <div id="imageSettings" class="card mb-4 settings-row">
+            <div class="card-header">
+                <h5>Image Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 이미지 업로드 -->
+                    <div class="col-md-6">
+                        <label for="imageUpload" class="form-label">Upload Image</label>
+                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required>
+                        <img id="imagePreview" class="preview-image" style="display: none;">
+                    </div>
+        
+                    <!-- 이미지 설정 -->
+                    <div class="col-md-6">
+                        <div class="row align-items-center">
+                            <!-- Task 선택 -->
+                            <div class="col-12 mb-3">
+                                <label class="form-label">Task</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="task" id="taskCls" value="cls">
+                                    <label class="btn btn-outline-primary" for="taskCls">CLS</label>
+        
+                                    <input type="radio" class="btn-check" name="task" id="taskOd" value="od" checked>
+                                    <label class="btn btn-outline-primary" for="taskOd">OD</label>
+        
+                                    <input type="radio" class="btn-check" name="task" id="taskSeg" value="seg">
+                                    <label class="btn btn-outline-primary" for="taskSeg">SEG</label>
+                                </div>
+                            </div>
+        
+                            <!-- 스위치 설정 -->
+                            <div class="col-12">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="useGrayscale">
+                                    <label class="form-check-label" for="useGrayscale">Grayscale</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="useRgb" checked>
+                                    <label class="form-check-label" for="useRgb">Use RGB</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 텍스트 설정 행 (기본적으로 숨김) -->
+        <div id="textSettings" class="card mb-4 settings-row">
+    <div class="card-header">
+        <h5>CSV Data Settings</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <!-- CSV 파일 업로드 -->
+                <div class="mb-3">
+                    <label for="csvUpload" class="form-label">Upload CSV File</label>
+                    <input type="file" class="form-control" id="csvUpload" 
+                           accept=".csv" required>
+                    <div class="form-text">Please upload a CSV file containing your text data</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <!-- Target Column 설정 -->
+                <div class="mb-3">
+                    <label for="targetColumn" class="form-label">Target Column</label>
+                    <input type="text" class="form-control" id="targetColumn" 
+                           placeholder="Enter column name" required>
+                    <div class="form-text">Specify the column name containing target text data</div>
+                </div>
+                <!-- CSV 미리보기 -->
+                <div class="mb-3">
+                    <label class="form-label">Preview</label>
+                    <div id="csvPreview" class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                        <small class="text-muted">CSV preview will appear here</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    </div>
+
+<!-- Run 버튼 -->
+<div class="container mt-4 mb-4">
+    <button type="button" class="btn btn-success btn-lg px-5 py-3 float-end" style="width: 170px; font-size: 1.5rem;">
+        <i class="bi bi-play-fill fs-4"></i> Run
+    </button>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 입력 타입에 따른 설정 표시
+        function showSettings() {
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            document.getElementById('imageSettings').style.display = inputType === 'image' ? 'block' : 'none';
+            document.getElementById('textSettings').style.display = inputType === 'text' ? 'block' : 'none';
+        }
+
+        // 이미지 미리보기
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const preview = document.getElementById('imagePreview');
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 폼 제출
+        function submitForms() {
+            const formData = new FormData();
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            
+            // 공통 설정
+            formData.append('model', document.getElementById('modelSelect').value);
+            formData.append('targetLayer', document.getElementById('targetLayer').value);
+            formData.append('useGpu', document.getElementById('useGpu').checked);
+            formData.append('inputType', inputType);
+
+            if (inputType === 'image') {
+                // 이미지 설정
+                const imageFile = document.getElementById('imageUpload').files[0];
+                formData.append('image', imageFile);
+                formData.append('useGrayscale', document.getElementById('useGrayscale').checked);
+                formData.append('useRgb', document.getElementById('useRgb').checked);
+                formData.append('task', document.querySelector('input[name="task"]:checked').value);
+            } else {
+                // 텍스트 설정
+                formData.append('text', document.getElementById('inputText').value);
+            }
+
+            // API 호출
+            fetch('/camvis/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    window.location.href = '/camvis/analyze';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while uploading');
+            });
+        }
+    </script>
+</body>
+</html>
