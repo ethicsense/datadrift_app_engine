@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAM Visualization Result</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .result-image {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+        .image-card {
+            height: 100%;
+        }
+        .card-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="mb-4">CAM Visualization Result</h2>
+        
+        <!-- 첫 번째 행: 원본 이미지와 추론 결과 -->
+        <div class="row mb-4">
+            <!-- 원본 이미지 -->
+            <div class="col-md-6 mb-4">
+                <div class="card image-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Original Image</h5>
+                    </div>
+                    <div class="card-body">
+                        <img src="{{ url_for('static', filename=original_image.replace('static/', '')) }}" 
+                             class="result-image" alt="Original Image">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 추론 결과 -->
+            <div class="col-md-6 mb-4">
+                <div class="card image-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Detection Result</h5>
+                    </div>
+                    <div class="card-body">
+                        <img src="{{ url_for('static', filename=inference_image.replace('static/', '')) }}" 
+                             class="result-image" alt="Inference Result">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 두 번째 행: CAM 결과와 Grayscale CAM -->
+        <div class="row mb-4">
+            <!-- CAM 결과 -->
+            <div class="col-md-6 mb-4">
+                <div class="card image-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">CAM Visualization</h5>
+                    </div>
+                    <div class="card-body">
+                        <img src="{{ url_for('static', filename=cam_image.replace('static/', '')) }}" 
+                             class="result-image" alt="CAM Result">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grayscale CAM -->
+            <div class="col-md-6 mb-4">
+                <div class="card image-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Grayscale CAM</h5>
+                    </div>
+                    <div class="card-body">
+                        <img src="{{ url_for('static', filename=g_scale_image.replace('static/', '')) }}" 
+                             class="result-image" alt="Grayscale CAM">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 검출 결과 테이블 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Detection Results</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Confidence</th>
+                            <th>Bounding Box</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in detection_results %}
+                        <tr>
+                            <td>{{ result.class_name }}</td>
+                            <td>{{ "%.2f"|format(result.confidence) }}</td>
+                            <td>{{ "[%.1f, %.1f, %.1f, %.1f]"|format(*result.bbox) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 뒤로 가기 버튼 -->
+        <div class="d-flex justify-content-center mb-5">
+            <a href="/camvis/upload_page" class="btn btn-primary">
+                Back to Upload Page
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -3,9 +3,11 @@
 
 # ignore DB
 db/
+**/static/
 
 # ignore libraries
 deep_text_recognition_benchmark
+datadoctor/yolo_cam/
 
 # ignore macOS files
 .DS_Store

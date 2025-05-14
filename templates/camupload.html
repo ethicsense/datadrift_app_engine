@@ -25,7 +25,8 @@
                 <h5>Model Configuration</h5>
             </div>
             <div class="card-body">
-                <div class="row align-items-end">
+                <!-- 첫 번째 줄 -->
+                <div class="row align-items-end mb-4">
                     <!-- 모델 선택 -->
                     <div class="col">
                         <label for="modelSelect" class="form-label">Select Model</label>
@@ -37,23 +38,42 @@
                         </select>
                     </div>
 
-                    <!-- Target Layer -->
-                    <div class="col">
-                        <label for="targetLayer" class="form-label">Target Layer</label>
-                        <input type="number" class="form-control" id="targetLayer" 
-                               min="2" max="20" value="2" required>
-                    </div>
-
                     <!-- GPU 사용 여부 -->
                     <div class="col">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="useGpu" checked>
+                            <input class="form-check-input" type="checkbox" id="useGpu">
                             <label class="form-check-label" for="useGpu">Use GPU</label>
                         </div>
                     </div>
 
+                    <!-- 레이어 수 표시 -->
+                    <div class="col text-center">
+                        <span id="layerCount" class="badge bg-secondary" style="font-size: 1rem;">
+                            Layers: -
+                        </span>
+                    </div>
+
+                    <!-- Load Model 버튼 -->
+                    <div class="col d-flex justify-content-end">
+                        <button type="button" class="btn btn-success" onclick="loadModel()">
+                            Load Model
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- 두 번째 줄 -->
+                <div class="row align-items-end mt-2">
+
+                    <!-- Target Layer -->
+                    <div class="col-2">
+                        <label for="targetLayer" class="form-label">Target Layer</label>
+                        <input type="number" class="form-control" id="targetLayer" 
+                            min="2" max="20" value="2" required>
+                    </div>
+
                     <!-- Input Type 선택 -->
-                    <div class="col">
+                    <div class="col-auto">
                         <label class="form-label">Input Type</label>
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="inputType" id="typeImage" value="image" checked>
@@ -65,7 +85,7 @@
                     </div>
 
                     <!-- 모델 업로드 버튼 -->
-                    <div class="col">
+                    <div class="col d-flex justify-content-end">
                         <button type="button" class="btn btn-success" onclick="showSettings()">
                             Configure Input
                         </button>
@@ -162,7 +182,9 @@
 
 <!-- Run 버튼 -->
 <div class="container mt-4 mb-4">
-    <button type="button" class="btn btn-success btn-lg px-5 py-3 float-end" style="width: 170px; font-size: 1.5rem;">
+    <button type="button" class="btn btn-warning btn-lg px-5 py-3 float-end"
+            style="width: 170px; font-size: 1.5rem;"
+            onclick="runCam()">
         <i class="bi bi-play-fill fs-4"></i> Run
     </button>
 </div>
@@ -230,6 +252,148 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while uploading');
+            });
+        }
+
+        function loadModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const useGpu = document.getElementById('useGpu').checked;
+            const layerCountElement = document.getElementById('layerCount');
+            
+            // 모델이 선택되지 않은 경우 처리
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            // 로딩 상태 표시
+            layerCountElement.textContent = 'Loading...';
+            
+            // 백엔드 API 호출
+            fetch('/api/model/load', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName,
+                    use_gpu: useGpu
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    layerCountElement.textContent = 'Error';
+                    alert('Error: ' + data.error);
+                } else {
+                    // 레이어 수 업데이트
+                    layerCountElement.textContent = `Layers: ${data.layer_count}`;
+                    // Target Layer input의 max 값을 업데이트
+                    document.getElementById('targetLayer').max = data.layer_count;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                layerCountElement.textContent = 'Error';
+                alert('Failed to load model');
+            });
+        }
+
+        function runCam() {
+            const formData = new FormData();
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            
+            // 필수 입력 확인
+            const modelSelect = document.getElementById('modelSelect');
+            if (!modelSelect.value) {
+                alert('Please select a model first');
+                return;
+            }
+
+            // 공통 설정
+            formData.append('model', modelSelect.value);
+            formData.append('targetLayer', document.getElementById('targetLayer').value);
+            formData.append('useGpu', document.getElementById('useGpu').checked);
+            formData.append('inputType', inputType);
+
+            if (inputType === 'image') {
+                // 이미지 설정
+                const imageUpload = document.getElementById('imageUpload');
+                if (!imageUpload.files[0]) {
+                    alert('Please upload an image');
+                    return;
+                }
+                formData.append('file', imageUpload.files[0]);
+                formData.append('useGrayscale', document.getElementById('useGrayscale').checked);
+                formData.append('useRgb', document.getElementById('useRgb').checked);
+                formData.append('task', document.querySelector('input[name="task"]:checked').value);
+            } else {
+                // CSV 설정
+                const csvUpload = document.getElementById('csvUpload');
+                const targetColumn = document.getElementById('targetColumn');
+                if (!csvUpload.files[0]) {
+                    alert('Please upload a CSV file');
+                    return;
+                }
+                if (!targetColumn.value) {
+                    alert('Please specify target column');
+                    return;
+                }
+                formData.append('csv', csvUpload.files[0]);
+                formData.append('targetColumn', targetColumn.value);
+            }
+
+            // 로딩 표시
+            const runButton = document.querySelector('button[onclick="runCam()"]');
+            const originalText = runButton.innerHTML;
+            runButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            runButton.disabled = true;
+
+            // API 호출
+            fetch('/camvis/run_cam', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    const errorMessage = data.error.message || data.error;
+                    const errorDetails = data.error.details ? `\n\nDetails:\n${data.error.details}` : '';
+                    alert(`Error occurred:\n${errorMessage}${errorDetails}`);
+                } else {
+                    // 성공시 결과 페이지로 이동
+                    window.location.href = data.redirect_url;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // 에러 메시지를 사용자 친화적으로 표시
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger alert-dismissible fade show';
+                errorDiv.innerHTML = `
+                    <strong>Error occurred:</strong><br>
+                    ${error.message || 'An unexpected error occurred'}<br>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                
+                // 에러 메시지를 페이지 상단에 삽입
+                const container = document.querySelector('.container');
+                container.insertBefore(errorDiv, container.firstChild);
+                
+                // 5초 후 자동으로 에러 메시지 제거
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            })
+            .finally(() => {
+                // 버튼 상태 복구
+                runButton.innerHTML = originalText;
+                runButton.disabled = false;
             });
         }
     </script>
