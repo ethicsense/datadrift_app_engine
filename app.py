@@ -3,9 +3,11 @@ import fiftyone.brain as fob
 import clip
 import torch
 
+import cv2
 import numpy as np
+from PIL import Image
 
-from flask import Flask, render_template, request, redirect, url_for, Response, send_file, jsonify, g
+from flask import Flask, render_template, request, redirect, url_for, Response, send_file, jsonify, g, current_app
 from flask import session as flask_session
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
@@ -88,6 +90,9 @@ app.secret_key = os.urandom(24)
 ## logger instance
 capture_stream = CaptureOutput()
 sys.stdout = capture_stream
+
+def init_app(app):
+    app.model_storage = None
 
 @app.route('/')
 def index():
@@ -650,18 +655,188 @@ def stream_logs():
     return Response(generate(), mimetype='text/event-stream')
 
 
+
+
+
+
+
+def parse_detections(results):
+    """YOLO 모델의 결과를 박스, 색상, 클래스명으로 파싱"""
+    boxes = []
+    colors = []
+    names = []
+    
+    for result in results[0].boxes:
+        box = result.xyxy[0].cpu().numpy()  # x1, y1, x2, y2 형식
+        conf = float(result.conf)
+        cls = int(result.cls)
+        name = results[0].names[cls]
+        
+        boxes.append(box)
+        colors.append(generate_color(cls))  # 클래스별 고유 색상
+        names.append(f"{name} {conf:.2f}")
+    
+    return np.array(boxes), colors, names
+
+def generate_color(class_id):
+    """클래스 ID에 따른 고유한 색상 생성"""
+    np.random.seed(class_id)
+    color = np.random.randint(0, 255, size=3).tolist()
+    return color
+
+def draw_detections(boxes, colors, names, image):
+    """검출 결과를 이미지에 시각화"""
+    for box, color, name in zip(boxes, colors, names):
+        x1, y1, x2, y2 = map(int, box)
+        
+        # 박스 그리기
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+        
+        # 텍스트 배경 그리기
+        (text_w, text_h), _ = cv2.getTextSize(name, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        cv2.rectangle(image, (x1, y1-text_h-4), (x1+text_w, y1), color, -1)
+        
+        # 텍스트 그리기
+        cv2.putText(image, name, (x1, y1-4), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+    
+    return image
+
+def get_image_from_request(request, grayscale=False):
+    print(request.files)
+    if request.files and "file" in request.files:
+        if request.files["file"].content_type.startswith("image"):
+            data = request.files["file"].read()
+            bgr = cv2.imdecode(
+                np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
+            )
+            return cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if grayscale else cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        raise TypeError("file content type should be image.")
+    raise ValueError("file field not found from request.")
+
 @app.route('/camvis/upload_page')
 def cam_upload():
     models = [m for m in os.listdir('./models')]
     return render_template('camupload.html', models=models)
 
+def get_model():
+    if current_app.model_storage is None:
+        raise ValueError("Model not loaded. Please load the model first.")
+    return current_app.model_storage
 
+@app.route('/api/model/load', methods=['POST'])
+def load_model():
+    from ultralytics import YOLO
 
+    data = request.json
+    model_path = os.path.join('models', data['model_name'])
+    use_gpu = data['use_gpu']
+    
+    try:
+        device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        print(model_path)
+        current_app.model_storage = YOLO(model_path)
+        current_app.model_storage.to(device)
+        layer_count = len(current_app.model_storage.model.model) - 1  # 모델 구조에 따라 조정 필요
+        
+        return jsonify({
+            'success': True,
+            'layer_count': layer_count
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
 
+@app.route('/camvis/run_cam', methods=['POST'])
+def run_cam():
+    # try:
+        use_grayscale = request.form.get('useGrayscale') == 'true'
+        img = get_image_from_request(request, grayscale=use_grayscale)
+        img = cv2.resize(img, (640, 640))  # YOLO 입력 크기로 리사이즈
+        rgb_img = img.copy()  # 원본 복사본 저장
+        img = np.float32(img) / 255  # 정규화
 
+        task = request.form.get('task')
+        use_rgb = request.form.get('useRgb') == 'false'
 
+        from datadoctor.yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
+        from datadoctor.yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
+        from datadoctor.yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
+        import matplotlib.pyplot as plt
 
+        model = get_model()
+        results = model(rgb_img)
+        boxes, colors, names = parse_detections(results)
+        target_layer = [model.model.model[int(request.form.get('targetLayer'))]]
 
+        # CAM 계산
+        cam = YOLO_EigenCAM(model, target_layer, task=task)
+        grayscale_cam = cam(rgb_img)[0, :, :]
+
+        # CAM 이미지 시각화
+        cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
+        # 흑백
+        g_scale_normalized = (grayscale_cam * 255).astype(np.uint8)
+        g_scale_image = cv2.resize(np.stack([g_scale_normalized] * 3, axis=2), (640, 640))
+
+        # 이미지 저장 경로 설정
+        output_dir = 'static/cam_results'
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 원본 이미지 저장
+        timestamp = int(time.time())
+        original_path = f'{output_dir}/original_{timestamp}.jpg'
+        cv2.imwrite(original_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
+
+        # CAM 결과 이미지 저장
+        cam_path = f'{output_dir}/cam_{timestamp}.jpg'
+        cv2.imwrite(cam_path, cam_image)
+
+        g_scale_path = f'{output_dir}/g_scale_{timestamp}.jpg'
+        cv2.imwrite(g_scale_path, g_scale_image)
+
+        # 추론 결과 이미지 저장
+        inference_img = draw_detections(boxes, colors, names, rgb_img)
+        inference_path = f'{output_dir}/inference_{timestamp}.jpg'
+        cv2.imwrite(inference_path, cv2.cvtColor(inference_img, cv2.COLOR_RGB2BGR))
+        
+        # 세션에 결과 저장
+        flask_session['cam_results'] = {
+            'original_image': original_path,
+            'inference_image': inference_path,
+            'cam_image': cam_path,
+            'g_scale_image': g_scale_path,
+            'detection_results': [
+                {
+                    'class_name': result.names[int(result.boxes.cls[0])],
+                    'confidence': float(result.boxes.conf[0]),
+                    'bbox': result.boxes.xyxy[0].tolist()
+                }
+                for result in results
+            ]
+        }
+        
+        return jsonify({
+            'success': True,
+            'redirect_url': url_for('cam_result')
+        })
+
+    # except ValueError as e:
+    #     return jsonify({'error': str(e)}), 400
+    # except Exception as e:
+    #     return jsonify({'error': str(e)}), 500
+
+@app.route('/camvis/result')
+def cam_result():
+    results = flask_session.get('cam_results', {})
+    return render_template('cam_result.html',
+        original_image=results.get('original_image'),
+        inference_image=results.get('inference_image'),
+        cam_image=results.get('cam_image'),
+        g_scale_image=results.get('g_scale_image'),
+        detection_results=results.get('detection_results', [])
+    )
 
 # @socketio.on('check_fiftyone_ready')
 # def handle_check_fiftyone_ready():
@@ -673,5 +848,5 @@ def cam_upload():
 #         emit('fiftyone_ready', {'status': 'not_ready'})
 
 if __name__ == "__main__":
-
+    init_app(app)
     socketio.run(app, port=5555, debug=False)
