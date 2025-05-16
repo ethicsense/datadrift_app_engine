@@ -1,9 +1,9 @@
 # ignore fonts
 **/fonts/
 
-# ignore DB
+# ignore DB, temporal data & log files
 db/
-**/static/
+static/cam_results/
 
 # ignore libraries
 deep_text_recognition_benchmark

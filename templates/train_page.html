@@ -6,6 +6,8 @@
     <title>Train Model</title>
     <!-- Bootstrap CSS 추가 -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
     <style>
         .train-container {
             margin-top: 50px;
@@ -75,8 +77,8 @@
 </head>
 <body>
     <div class="container train-container">
-        <h1 class="text-center mb-4">Adaptive Trainer</h1>
-        <form action="/train" method="post">
+        <h1 class="page-title">Adaptive Trainer</h1>
+        <form action="train" method="post">
             <div class="row">
                 <div class="col-md-6">
                     <table class="table table-bordered dataset-table">
@@ -157,7 +159,7 @@
         
         <div id="log" class="mt-4"></div>
         <div class="download-button-container">
-            <a href="/download_model" class="btn btn-secondary download-button">Model Download</a>
+            <a href="download_model" class="btn btn-warning download-button" style="font-weight: 600;">Model Download</a>
         </div>
     </div>
 
@@ -184,7 +186,7 @@
         });
 
         function fetchLogs() {
-            const eventSource = new EventSource('/stream_logs');
+            const eventSource = new EventSource('stream_logs');
             const logElement = document.getElementById('log');
             const maxMessages = 100; // 최대 메시지 수 설정
             let messages = [];

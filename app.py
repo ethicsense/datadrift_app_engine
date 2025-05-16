@@ -82,7 +82,7 @@ atexit.register(tsb_runner.stop)
 fom_runner = FiftyoneManager(port=args.port)
 fiftyone_thread = fom_runner.start()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app)
 socketio = SocketIO(app)
 app.secret_key = os.urandom(24)
@@ -96,21 +96,23 @@ def init_app(app):
 
 @app.route('/')
 def index():
+    return redirect(url_for('datadoctor'))
 
-    return redirect(url_for('init_data'))
+@app.route('/datadoctor')
+def datadoctor():
+    return render_template('hellodd.html')
 
-@app.route('/init_data')
+@app.route('/dsampler/init_data')
 def init_data():
-
     return render_template('init_data.html')
 
-@app.route('/get_existing_datasets', methods=['GET'])
+@app.route('/dsampler/get_existing_datasets', methods=['GET'])
 def get_existing_datasets():
     existing_datasets = fo.list_datasets()
 
     return jsonify(existing_datasets)
 
-@app.route('/load_existing_dataset', methods=['POST'])
+@app.route('/dsampler/load_existing_dataset', methods=['POST'])
 def load_existing_dataset():
     dataset_name = request.form.get('saved-datasets')
     dataset = fo.load_dataset(dataset_name)
@@ -128,7 +130,7 @@ def load_existing_dataset():
 
     return redirect(url_for('dataclinic', fiftyone_port_number=fom_runner.port))
 
-@app.route('/delete_dataset', methods=['POST'])
+@app.route('/dsampler/delete_dataset', methods=['POST'])
 def delete_dataset():
     try:
         data = request.get_json()
@@ -181,7 +183,7 @@ def delete_dataset():
         print(error_msg)
         return jsonify({'message': error_msg}), 500
 
-@app.route('/upload', methods=['POST'])
+@app.route('/dsampler/upload', methods=['POST'])
 def upload_file():
     UPLOAD_FOLDER = './datasets/uploads'
     ref_dataset = None
@@ -473,7 +475,7 @@ def upload_file():
         print("No valid files processed.")  # 디버그 출력
         return jsonify({'message': 'Invalid file type'}), 400
 
-@app.route('/dataclinic')
+@app.route('/dsampler/dataclinic')
 def dataclinic():
     # list_views를 가져옵니다.
     list_views = fom_runner.session.dataset.list_saved_views()
@@ -499,7 +501,7 @@ def dataclinic():
 
 # #     return redirect(url_for('home'))
 
-@app.route('/export', methods=['POST'])
+@app.route('/dsampler/export', methods=['POST'])
 def export_selected_view():
     # 선택된 뷰 가져오기
     selected_view = request.form.get('selected_view')
@@ -559,7 +561,7 @@ def export_selected_view():
 
     return redirect(url_for('dataclinic'))
 
-@app.route('/train_page', methods=['GET', 'POST'])
+@app.route('/dsampler/train_page', methods=['GET', 'POST'])
 def train_page():
     # Exported datasets directory
     export_dir = './datasets/exported_datasets/'
@@ -582,7 +584,7 @@ def train_page():
 
     return render_template('train_page.html', datasets=datasets, models=models)
 
-@app.route('/train', methods=['GET', 'POST'])
+@app.route('/dsampler/train', methods=['GET', 'POST'])
 def train():
     if request.method == 'POST':
         print(f"Train Dataset : {request.form.get('selected_dataset')}")
@@ -629,7 +631,7 @@ def train():
 
     return render_template('train_page.html', project='runs', name='exp', epochs=100, batch_size=16, img_size=640, learning_rate=0.001)
 
-@app.route('/download_model')
+@app.route('/dsampler/download_model')
 def download_model():
     project = flask_session.get('project', 'runs')
     run = flask_session.get('run', 'exp')
@@ -640,7 +642,7 @@ def download_model():
 
     return send_file(model_path, as_attachment=True)
 
-@app.route('/stream_logs')
+@app.route('/dsampler/stream_logs')
 def stream_logs():
     def generate():
         while True:
@@ -714,15 +716,94 @@ def get_image_from_request(request, grayscale=False):
         raise TypeError("file content type should be image.")
     raise ValueError("file field not found from request.")
 
-@app.route('/camvis/upload_page')
-def cam_upload():
-    models = [m for m in os.listdir('./models')]
-    return render_template('camupload.html', models=models)
-
 def get_model():
     if current_app.model_storage is None:
         raise ValueError("Model not loaded. Please load the model first.")
     return current_app.model_storage
+
+def visualize_layer_sequence(model, rgb_img, img, cam_class, cam_kwargs, task='od', use_rgb=True):
+    """
+    모델의 레이어별 CAM 시각화를 수행하는 함수
+    
+    Args:
+        model: YOLO 모델
+        rgb_img: RGB 형식의 입력 이미지
+        img: 정규화된 입력 이미지
+        task: CAM 작업 유형 ('od' for object detection)
+        use_rgb: RGB 시각화 사용 여부
+    
+    Returns:
+        str: 저장된 시퀀스 이미지의 경로
+    """
+    from datadoctor.yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    
+    total_layers = len(model.model.model) - 1
+    n_seq = 7
+
+    # 1, total_layers-1은 반드시 포함, 나머지는 균등하게 샘플링
+    if total_layers <= 2:
+        layer_indices = [1, total_layers-1]
+    else:
+        # 중간값 균등 샘플링 (2 ~ total_layers-2)
+        if n_seq > 2:
+            mid_indices = np.linspace(2, total_layers-2, n_seq-2, dtype=int)
+            layer_indices = [1] + list(mid_indices) + [total_layers-1]
+        else:
+            layer_indices = [1, total_layers-1]
+
+    # 메인 플롯 생성
+    fig = plt.figure(figsize=(21, 7))
+    gs = plt.GridSpec(2, 1, height_ratios=[0.2, 1], hspace=0)
+    
+    # 깊이 표시 컬러바 추가
+    ax_depth = fig.add_subplot(gs[0])
+    gradient = np.linspace(0, 1, 100).reshape(1, -1)
+    ax_depth.imshow(gradient, cmap='Blues', aspect='auto')
+    ax_depth.set_xticks([0, 99])
+    ax_depth.set_xticklabels(['Shallow', 'Deep'], fontsize=18)
+    ax_depth.set_yticks([])
+    ax_depth.set_title('Layer Depth', pad=10, fontsize=22)
+    
+    # 각 레이어의 CAM 생성 및 시각화
+    for idx, layer_idx in enumerate(layer_indices):
+        try:
+            target_layer = [model.model.model[layer_idx]]
+            cam = cam_class(model, target_layer, **cam_kwargs)
+            grayscale_cam = cam(rgb_img)[0, :, :]
+            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
+            
+            ax = plt.subplot(2, n_seq, n_seq + idx + 1)
+            ax.imshow(cam_image)
+            ax.set_title(f'Layer {layer_idx}', fontsize=18)
+            ax.axis('off')
+        except Exception as e:
+            print(f"Error processing layer {layer_idx}: {str(e)}")
+            continue
+    
+    plt.suptitle('Layer-wise Visualization (Shallow → Deep)', y=1.1, fontsize=18)
+    plt.subplots_adjust(left=0, right=1, top=0.98, bottom=0.01, wspace=0.05, hspace=0.001)
+    
+    # 이미지 저장
+    output_dir = 'static/cam_results'
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = int(time.time())
+    sequence_path = f'{output_dir}/layer_sequence_{timestamp}.jpg'
+    plt.savefig(sequence_path, bbox_inches='tight', dpi=300, pad_inches=0.08)
+    plt.close()
+    
+    return sequence_path
+
+
+
+
+
+@app.route('/camvis/upload_page')
+def cam_upload():
+    models = [m for m in os.listdir('./models')]
+    return render_template('camupload.html', models=models)
 
 @app.route('/api/model/load', methods=['POST'])
 def load_model():
@@ -783,9 +864,9 @@ def run_cam():
         # 이미지 저장 경로 설정
         output_dir = 'static/cam_results'
         os.makedirs(output_dir, exist_ok=True)
+        timestamp = int(time.time())
 
         # 원본 이미지 저장
-        timestamp = int(time.time())
         original_path = f'{output_dir}/original_{timestamp}.jpg'
         cv2.imwrite(original_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
 
@@ -793,8 +874,17 @@ def run_cam():
         cam_path = f'{output_dir}/cam_{timestamp}.jpg'
         cv2.imwrite(cam_path, cam_image)
 
+        # 흑백 이미지 저장
         g_scale_path = f'{output_dir}/g_scale_{timestamp}.jpg'
         cv2.imwrite(g_scale_path, g_scale_image)
+
+        # 레이어 시퀀스 시각화 수행
+        sequence_path = visualize_layer_sequence(
+            model, rgb_img, img,
+            cam_class=YOLO_EigenCAM,
+            cam_kwargs={'task': task},
+            use_rgb=use_rgb
+        )
 
         # 추론 결과 이미지 저장
         inference_img = draw_detections(boxes, colors, names, rgb_img)
@@ -807,6 +897,7 @@ def run_cam():
             'inference_image': inference_path,
             'cam_image': cam_path,
             'g_scale_image': g_scale_path,
+            'sequence_image': sequence_path,
             'detection_results': [
                 {
                     'class_name': result.names[int(result.boxes.cls[0])],
@@ -835,6 +926,7 @@ def cam_result():
         inference_image=results.get('inference_image'),
         cam_image=results.get('cam_image'),
         g_scale_image=results.get('g_scale_image'),
+        sequence_image=results.get('sequence_image'),
         detection_results=results.get('detection_results', [])
     )
 
