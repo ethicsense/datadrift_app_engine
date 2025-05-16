@@ -6,6 +6,8 @@
     <title>Data Initialization</title>
     <!-- Bootstrap CSS 추가 -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
     <style>
         .upload-status {
             height: 150px;
@@ -34,10 +36,10 @@
 <body>
     <div class="container mt-5">
         <div class="text-center mb-5">
-            <h1>DataDrift App Engine</h1>
+            <h1 class="page-title">Data Sampler Tool</h1>
         </div>
         <h3 class="mb-4">New Data Upload</h3>
-        <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+        <form id="upload-form" action="upload" method="post" enctype="multipart/form-data">
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <div class="card">
@@ -104,14 +106,16 @@
                             <input type="text" id="merged-dataset-name" name="merged-dataset-name" placeholder="Enter merged dataset name" class="form-control mb-3">
                         </div>
                         <div class="col-12">
-                            <button type="button" class="btn btn-primary mb-3 btn-block" onclick="submitForm()">Process & Load Dataset</button>
+                            <button type="button" class="btn btn-success mb-3 btn-block" 
+                                    style="padding: 15px 0; font-size: 1.2rem; font-weight: 600;" 
+                                    onclick="submitForm()">Process & Load Dataset</button>
                         </div>
                     </div>
                 </div>
             </div>
         </form>
         <h3 class="mt-5" style="margin-bottom: 24px;">Built Dataset List</h3>
-        <form id="load-dataset-form" action="/load_existing_dataset" method="post">
+        <form id="load-dataset-form" action="load_existing_dataset" method="post">
             <div class="form-group">
                 <div class="row">
                     <div class="col-md-9">
@@ -120,8 +124,12 @@
                         </div>
                     </div>
                     <div class="col-md-3 d-flex flex-column">
-                        <button type="button" class="btn btn-secondary btn-block flex-grow-1" onclick="submitLoadForm()">Load Selected Dataset</button>
-                        <button type="button" class="btn btn-danger btn-block flex-grow-1" onclick="deleteDataset()">Delete Selected Dataset</button>
+                        <button type="button" class="btn btn-warning btn-block flex-grow-1"
+                                style="font-weight: 600;"
+                                onclick="submitLoadForm()">Load Dataset</button>
+                        <button type="button" class="btn btn-danger btn-block flex-grow-1"
+                                style="font-weight: 600;"
+                                onclick="deleteDataset()">Delete Dataset</button>
                     </div>
                 </div>
                 <input type="hidden" id="selected-dataset" name="saved-datasets">
@@ -135,7 +143,7 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            fetch('/get_existing_datasets')
+            fetch('get_existing_datasets')
                 .then(response => response.json())
                 .then(datasets => {
                     const listGroup = document.getElementById('dataset-list');
@@ -186,7 +194,7 @@
             const selected = document.querySelector('.list-group-item.active');
             if (selected) {
                 const datasetName = document.getElementById('selected-dataset').value;
-                fetch(`/delete_dataset`, {
+                fetch(`delete_dataset`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
