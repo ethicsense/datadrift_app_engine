@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAM Visualization Upload</title>
+    <title>C.A.M Visualization Upload</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
@@ -18,8 +18,8 @@
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="page-title text-center">CAM Visualization Tool</h1>
+    <div class="container mt-5 mb-5" style="padding-bottom: 100px;">
+        <h1 class="page-title text-center">C.A.M Visualization Tool</h1>
         
         <!-- 모델 설정 행 -->
         <div class="card mb-4">
@@ -50,9 +50,6 @@
 
                     <!-- 레이어 수 표시 -->
                     <div class="col text-center">
-                        <span id="layerCount" class="badge bg-secondary" style="font-size: 1rem;">
-                            Layers: -
-                        </span>
                     </div>
 
                     <!-- Load Model 버튼 -->
@@ -69,9 +66,10 @@
 
                     <!-- Target Layer -->
                     <div class="col-2">
-                        <label for="targetLayer" class="form-label">Target Layer</label>
-                        <input type="number" class="form-control" id="targetLayer" 
-                            min="2" max="20" value="2" required>
+                        <label class="form-label">Total Layers</label>
+                        <span id="layerCount" class="form-control bg-light" style="font-size: 1rem;">
+                            -
+                        </span>
                     </div>
 
                     <!-- Input Type 선택 -->
@@ -105,9 +103,15 @@
                 <div class="row">
                     <!-- 이미지 업로드 -->
                     <div class="col-md-6">
-                        <label for="imageUpload" class="form-label">Upload Image</label>
-                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required>
-                        <img id="imagePreview" class="preview-image" style="display: none;">
+                        <label for="imageUpload" class="form-label">Upload Images</label>
+                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required multiple>
+                        
+                        <!-- 이미지 미리보기 영역 -->
+                        <div id="imagePreviewContainer" class="mt-3">
+                            <div class="row" id="previewRow">
+                                <!-- 미리보기 이미지들이 여기에 동적으로 추가됨 -->
+                            </div>
+                        </div>
                     </div>
         
                     <!-- 이미지 설정 -->
@@ -118,13 +122,13 @@
                                 <label class="form-label">Task</label>
                                 <div class="btn-group w-100" role="group">
                                     <input type="radio" class="btn-check" name="task" id="taskCls" value="cls">
-                                    <label class="btn btn-outline-primary" for="taskCls">CLS</label>
+                                    <label class="btn btn-outline-primary" for="taskCls">Classification</label>
         
                                     <input type="radio" class="btn-check" name="task" id="taskOd" value="od" checked>
-                                    <label class="btn btn-outline-primary" for="taskOd">OD</label>
+                                    <label class="btn btn-outline-primary" for="taskOd">Object Detection</label>
         
                                     <input type="radio" class="btn-check" name="task" id="taskSeg" value="seg">
-                                    <label class="btn btn-outline-primary" for="taskSeg">SEG</label>
+                                    <label class="btn btn-outline-primary" for="taskSeg">Segmentation</label>
                                 </div>
                             </div>
         
@@ -135,8 +139,8 @@
                                     <label class="form-check-label" for="useGrayscale">Grayscale</label>
                                 </div>
                                 <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="useRgb" checked>
-                                    <label class="form-check-label" for="useRgb">Use RGB</label>
+                                    <input class="form-check-input" type="checkbox" id="useRgb">
+                                    <label class="form-check-label" for="useRgb">Heatmap Inversion</label>
                                 </div>
                             </div>
                         </div>
@@ -183,16 +187,53 @@
     </div>
 
 <!-- Run 버튼 -->
-<div class="container mt-4 mb-4">
-    <button type="button" class="btn btn-warning btn-lg px-5 py-3 float-end"
-            style="width: 170px; font-size: 1.5rem;"
-            onclick="runCam()">
-        <i class="bi bi-play-fill fs-4"></i> Run
-    </button>
+<div class="container mt-4 mb-4" style="padding-bottom: 48px;">
+    <div class="position-fixed bottom-0 end-0 p-3" style="background-color: white; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); width: 100%;">
+        <div class="container d-flex justify-content-end">
+            <button type="button" class="btn btn-warning btn-lg px-5 py-3"
+                    style="width: 170px; font-size: 1.5rem;"
+                    onclick="runCam()">
+                <i class="bi bi-play-fill fs-4"></i> Run
+            </button>
+        </div>
+    </div>
 </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 이미지 미리보기 관련 스타일
+        const previewStyles = `
+            .preview-container {
+                position: relative;
+                margin: 5px;
+                display: inline-block;
+            }
+            .preview-image {
+                max-width: 150px;
+                max-height: 150px;
+                object-fit: cover;
+                border-radius: 4px;
+            }
+            .remove-preview {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                background: red;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                text-align: center;
+                line-height: 20px;
+                cursor: pointer;
+            }
+        `;
+
+        // 스타일 추가
+        const styleSheet = document.createElement("style");
+        styleSheet.textContent = previewStyles;
+        document.head.appendChild(styleSheet);
+
         // 입력 타입에 따른 설정 표시
         function showSettings() {
             const inputType = document.querySelector('input[name="inputType"]:checked').value;
@@ -200,20 +241,108 @@
             document.getElementById('textSettings').style.display = inputType === 'text' ? 'block' : 'none';
         }
 
-        // 이미지 미리보기
+        // 이미지 업로드 처리
         document.getElementById('imageUpload').addEventListener('change', function(e) {
-            const preview = document.getElementById('imagePreview');
-            const file = e.target.files[0];
+            const previewContainer = document.getElementById('previewRow');
+            const files = e.target.files;
             
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
+            // 기존 미리보기 초기화
+            previewContainer.innerHTML = '';
+            
+            // 각 파일에 대한 미리보기 생성
+            Array.from(files).forEach((file, index) => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        const previewDiv = document.createElement('div');
+                        previewDiv.className = 'col-md-3 preview-container';
+                        previewDiv.innerHTML = `
+                            <img src="${e.target.result}" class="preview-image" alt="Preview ${index + 1}">
+                            <span class="remove-preview" onclick="removePreview(this)">×</span>
+                        `;
+                        previewContainer.appendChild(previewDiv);
+                    }
+                    
+                    reader.readAsDataURL(file);
                 }
-                reader.readAsDataURL(file);
-            }
+            });
         });
+
+        // 미리보기 제거 함수
+        function removePreview(element) {
+            element.parentElement.remove();
+        }
+
+        // 폴더 업로드 지원을 위한 드래그 앤 드롭 이벤트 처리
+        const dropZone = document.getElementById('imagePreviewContainer');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            
+            const items = e.dataTransfer.items;
+            const files = [];
+            
+            // 드롭된 항목 처리
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.kind === 'file') {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry.isDirectory) {
+                        // 디렉토리 처리
+                        processDirectory(entry, files);
+                    } else {
+                        // 파일 처리
+                        const file = item.getAsFile();
+                        if (file.type.startsWith('image/')) {
+                            files.push(file);
+                        }
+                    }
+                }
+            }
+            
+            // 파일 목록 업데이트
+            const dataTransfer = new DataTransfer();
+            files.forEach(file => dataTransfer.items.add(file));
+            document.getElementById('imageUpload').files = dataTransfer.files;
+            
+            // 미리보기 업데이트
+            const event = new Event('change');
+            document.getElementById('imageUpload').dispatchEvent(event);
+        });
+
+        // 디렉토리 처리 함수
+        function processDirectory(entry, files) {
+            const reader = entry.createReader();
+            
+            reader.readEntries((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isDirectory) {
+                        processDirectory(entry, files);
+                    } else {
+                        entry.file((file) => {
+                            if (file.type.startsWith('image/')) {
+                                files.push(file);
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         // 폼 제출
         function submitForms() {
@@ -222,7 +351,6 @@
             
             // 공통 설정
             formData.append('model', document.getElementById('modelSelect').value);
-            formData.append('targetLayer', document.getElementById('targetLayer').value);
             formData.append('useGpu', document.getElementById('useGpu').checked);
             formData.append('inputType', inputType);
 
@@ -290,8 +418,6 @@
                 } else {
                     // 레이어 수 업데이트
                     layerCountElement.textContent = `Layers: ${data.layer_count}`;
-                    // Target Layer input의 max 값을 업데이트
-                    document.getElementById('targetLayer').max = data.layer_count;
                 }
             })
             .catch(error => {
@@ -314,18 +440,24 @@
 
             // 공통 설정
             formData.append('model', modelSelect.value);
-            formData.append('targetLayer', document.getElementById('targetLayer').value);
             formData.append('useGpu', document.getElementById('useGpu').checked);
             formData.append('inputType', inputType);
 
             if (inputType === 'image') {
                 // 이미지 설정
                 const imageUpload = document.getElementById('imageUpload');
-                if (!imageUpload.files[0]) {
-                    alert('Please upload an image');
+                if (!imageUpload.files.length) {
+                    alert('Please upload at least one image');
                     return;
                 }
-                formData.append('file', imageUpload.files[0]);
+                
+                // 모든 이미지 파일 추가
+                Array.from(imageUpload.files).forEach((file, index) => {
+                    formData.append(`file_${index}`, file);
+                });
+                
+                // 업로드된 이미지 수 추가
+                formData.append('image_count', imageUpload.files.length);
                 formData.append('useGrayscale', document.getElementById('useGrayscale').checked);
                 formData.append('useRgb', document.getElementById('useRgb').checked);
                 formData.append('task', document.querySelector('input[name="task"]:checked').value);
