@@ -721,7 +721,7 @@ def get_model():
         raise ValueError("Model not loaded. Please load the model first.")
     return current_app.model_storage
 
-def visualize_layer_sequence(model, rgb_img, img, cam_class, cam_kwargs, task='od', use_rgb=True):
+def visualize_layer_sequence(model, rgb_img, img, cam_kwargs, use_rgb, output_dir, file_name):
     """
     모델의 레이어별 CAM 시각화를 수행하는 함수
     
@@ -729,72 +729,106 @@ def visualize_layer_sequence(model, rgb_img, img, cam_class, cam_kwargs, task='o
         model: YOLO 모델
         rgb_img: RGB 형식의 입력 이미지
         img: 정규화된 입력 이미지
-        task: CAM 작업 유형 ('od' for object detection)
+        cam_class: CAM 클래스
+        cam_kwargs: CAM 생성에 필요한 키워드 인자
         use_rgb: RGB 시각화 사용 여부
+        output_dir: 저장 경로
+        file_name: 파일 이름
     
     Returns:
         str: 저장된 시퀀스 이미지의 경로
     """
+    from datadoctor.yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
     from datadoctor.yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
+    from datadoctor.yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    
+
     total_layers = len(model.model.model) - 1
-    n_seq = 7
+    n_cols = 5  # 한 줄에 5개의 서브플롯
+    n_rows = (total_layers + n_cols - 1) // n_cols  # 올림 나눗셈
 
-    # 1, total_layers-1은 반드시 포함, 나머지는 균등하게 샘플링
-    if total_layers <= 2:
-        layer_indices = [1, total_layers-1]
-    else:
-        # 중간값 균등 샘플링 (2 ~ total_layers-2)
-        if n_seq > 2:
-            mid_indices = np.linspace(2, total_layers-2, n_seq-2, dtype=int)
-            layer_indices = [1] + list(mid_indices) + [total_layers-1]
-        else:
-            layer_indices = [1, total_layers-1]
-
-    # 메인 플롯 생성
-    fig = plt.figure(figsize=(21, 7))
-    gs = plt.GridSpec(2, 1, height_ratios=[0.2, 1], hspace=0)
+    # 메인 플롯 생성 - 왼쪽에 colorbar를 위한 공간 확보
+    fig = plt.figure(figsize=(27, 5 * n_rows))
     
-    # 깊이 표시 컬러바 추가
-    ax_depth = fig.add_subplot(gs[0])
-    gradient = np.linspace(0, 1, 100).reshape(1, -1)
-    ax_depth.imshow(gradient, cmap='Blues', aspect='auto')
-    ax_depth.set_xticks([0, 99])
-    ax_depth.set_xticklabels(['Shallow', 'Deep'], fontsize=18)
-    ax_depth.set_yticks([])
-    ax_depth.set_title('Layer Depth', pad=10, fontsize=22)
+    # colorbar를 위한 axes 생성
+    cbar_ax = fig.add_axes([0.02, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+
+    # im 변수 초기화
+    im = None
     
     # 각 레이어의 CAM 생성 및 시각화
-    for idx, layer_idx in enumerate(layer_indices):
+    for layer_idx in range(1, total_layers):
         try:
             target_layer = [model.model.model[layer_idx]]
-            cam = cam_class(model, target_layer, **cam_kwargs)
+            cam = YOLO_EigenCAM(model, target_layer, **cam_kwargs)
             grayscale_cam = cam(rgb_img)[0, :, :]
-            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
+            # use_rgb 값을 반전시켜서 전달
+            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=not use_rgb)
+
+            layer_path = f'{output_dir}/{file_name}_layer_{layer_idx}.jpg'
+            plt.figure(figsize=(10, 10))
+            plt.imshow(cam_image)
+            plt.axis('off')
+            plt.savefig(layer_path, bbox_inches='tight', dpi=300)
+            plt.close()
             
-            ax = plt.subplot(2, n_seq, n_seq + idx + 1)
-            ax.imshow(cam_image)
-            ax.set_title(f'Layer {layer_idx}', fontsize=18)
-            ax.axis('off')
+            # 첫 번째 서브플롯에 Shallow 표시
+            if layer_idx == 1:
+                ax = plt.subplot(n_rows, n_cols, 1)
+                ax.text(0.5, 0.5, 'Shallow', fontsize=24, ha='center', va='center', 
+                       color='blue', weight='bold', transform=ax.transAxes)
+                ax.axis('off')
+                
+                # 실제 레이어 1 이미지
+                ax = plt.subplot(n_rows, n_cols, 2)
+                im = ax.imshow(cam_image, vmin=0, vmax=1, cmap='jet')
+                ax.set_title(f'Layer {layer_idx}', fontsize=18)
+                ax.axis('off')
+            # 마지막 서브플롯에 Deep 표시
+            elif layer_idx == total_layers - 1:
+                # 마지막 레이어 이미지
+                ax = plt.subplot(n_rows, n_cols, n_cols * n_rows - 2)
+                im = ax.imshow(cam_image, vmin=0, vmax=1, cmap='jet')
+                ax.set_title(f'Layer {layer_idx}', fontsize=18)
+                ax.axis('off')
+                
+                # Deep 텍스트
+                ax = plt.subplot(n_rows, n_cols, n_cols * n_rows - 1)
+                ax.text(0.5, 0.5, 'Deep', fontsize=24, ha='center', va='center',
+                       color='blue', weight='bold', transform=ax.transAxes)
+                ax.axis('off')
+            else:
+                # 중간 레이어들
+                ax = plt.subplot(n_rows, n_cols, layer_idx + 1)  # +1 because first position is for Shallow
+                im = ax.imshow(cam_image, vmin=0, vmax=1, cmap='jet')
+                ax.set_title(f'Layer {layer_idx}', fontsize=18)
+                ax.axis('off')
+                
         except Exception as e:
             print(f"Error processing layer {layer_idx}: {str(e)}")
             continue
     
-    plt.suptitle('Layer-wise Visualization (Shallow → Deep)', y=1.1, fontsize=18)
-    plt.subplots_adjust(left=0, right=1, top=0.98, bottom=0.01, wspace=0.05, hspace=0.001)
+    # colorbar 추가 (im이 None이 아닌 경우에만)
+    if im is not None:
+        cbar = plt.colorbar(im, cax=cbar_ax, orientation='vertical')
+        cbar.set_label('Gradient Score', fontsize=16, labelpad=20)
+        cbar.ax.yaxis.set_label_position('left')
+        cbar.ax.tick_params(labelsize=14)
+    else:
+        # im이 None인 경우 (레이어 처리 실패) colorbar axes 제거
+        cbar_ax.remove()
+    
+    plt.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.05, wspace=0.1, hspace=0.2)
     
     # 이미지 저장
-    output_dir = 'static/cam_results'
-    os.makedirs(output_dir, exist_ok=True)
-    timestamp = int(time.time())
-    sequence_path = f'{output_dir}/layer_sequence_{timestamp}.jpg'
+    sequence_path = f'{output_dir}/{file_name}_layer_sequence.jpg'
     plt.savefig(sequence_path, bbox_inches='tight', dpi=300, pad_inches=0.08)
     plt.close()
     
     return sequence_path
+
 
 
 
@@ -831,72 +865,63 @@ def load_model():
 
 @app.route('/camvis/run_cam', methods=['POST'])
 def run_cam():
-    # try:
-        use_grayscale = request.form.get('useGrayscale') == 'true'
-        img = get_image_from_request(request, grayscale=use_grayscale)
+    files = []
+    for key in request.files:
+        if key.startswith('file_'):
+            files.append(request.files[key])
+    
+    if not files:
+        return jsonify({'error': 'No images uploaded'}), 400
+    
+    # 이미지 저장 경로 설정
+    output_dir = 'static/cam_results'
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+
+    use_grayscale = request.form.get('useGrayscale') == 'true'
+    task = request.form.get('task')
+    use_rgb = request.form.get('useRgb') == 'true'
+    model = get_model()
+
+    all_results = []
+
+    for idx, file in enumerate(files):
+        file_name = f'{timestamp}_{idx}'
+
+        data = file.read()
+        bgr = cv2.imdecode(
+            np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
+        )
+        img = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (640, 640))  # YOLO 입력 크기로 리사이즈
-        rgb_img = img.copy()  # 원본 복사본 저장
+        rgb_img = img.copy()
         img = np.float32(img) / 255  # 정규화
 
-        task = request.form.get('task')
-        use_rgb = request.form.get('useRgb') == 'false'
-
-        from datadoctor.yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
-        from datadoctor.yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
-        from datadoctor.yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
-        import matplotlib.pyplot as plt
-
-        model = get_model()
         results = model(rgb_img)
         boxes, colors, names = parse_detections(results)
-        target_layer = [model.model.model[int(request.form.get('targetLayer'))]]
-
-        # CAM 계산
-        cam = YOLO_EigenCAM(model, target_layer, task=task)
-        grayscale_cam = cam(rgb_img)[0, :, :]
-
-        # CAM 이미지 시각화
-        cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
-        # 흑백
-        g_scale_normalized = (grayscale_cam * 255).astype(np.uint8)
-        g_scale_image = cv2.resize(np.stack([g_scale_normalized] * 3, axis=2), (640, 640))
-
-        # 이미지 저장 경로 설정
-        output_dir = 'static/cam_results'
-        os.makedirs(output_dir, exist_ok=True)
-        timestamp = int(time.time())
 
         # 원본 이미지 저장
-        original_path = f'{output_dir}/original_{timestamp}.jpg'
+        original_path = f'{output_dir}/{file_name}_original.jpg'
         cv2.imwrite(original_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
-
-        # CAM 결과 이미지 저장
-        cam_path = f'{output_dir}/cam_{timestamp}.jpg'
-        cv2.imwrite(cam_path, cam_image)
-
-        # 흑백 이미지 저장
-        g_scale_path = f'{output_dir}/g_scale_{timestamp}.jpg'
-        cv2.imwrite(g_scale_path, g_scale_image)
 
         # 레이어 시퀀스 시각화 수행
         sequence_path = visualize_layer_sequence(
             model, rgb_img, img,
-            cam_class=YOLO_EigenCAM,
             cam_kwargs={'task': task},
-            use_rgb=use_rgb
+            use_rgb=use_rgb,
+            output_dir=output_dir,
+            file_name=file_name
         )
 
         # 추론 결과 이미지 저장
         inference_img = draw_detections(boxes, colors, names, rgb_img)
-        inference_path = f'{output_dir}/inference_{timestamp}.jpg'
+        inference_path = f'{output_dir}/{file_name}_inference.jpg'
         cv2.imwrite(inference_path, cv2.cvtColor(inference_img, cv2.COLOR_RGB2BGR))
-        
-        # 세션에 결과 저장
-        flask_session['cam_results'] = {
+
+        # 각 이미지의 결과 저장
+        image_result = {
             'original_image': original_path,
             'inference_image': inference_path,
-            'cam_image': cam_path,
-            'g_scale_image': g_scale_path,
             'sequence_image': sequence_path,
             'detection_results': [
                 {
@@ -905,29 +930,32 @@ def run_cam():
                     'bbox': result.boxes.xyxy[0].tolist()
                 }
                 for result in results
-            ]
+            ],
+            'file_name': file_name,
+            'total_layers': len(model.model.model) - 1
         }
-        
-        return jsonify({
-            'success': True,
-            'redirect_url': url_for('cam_result')
-        })
-
-    # except ValueError as e:
-    #     return jsonify({'error': str(e)}), 400
-    # except Exception as e:
-    #     return jsonify({'error': str(e)}), 500
+        all_results.append(image_result)
+    
+    # 세션에 결과 저장
+    flask_session['cam_results'] = {
+        'images': all_results,
+        'total_images': len(all_results)
+    }
+    
+    return jsonify({
+        'success': True,
+        'redirect_url': url_for('cam_result')
+    })
 
 @app.route('/camvis/result')
 def cam_result():
     results = flask_session.get('cam_results', {})
+    if not results:
+        return redirect(url_for('cam_upload'))  # 결과가 없으면 업로드 페이지로 리다이렉트
+        
     return render_template('cam_result.html',
-        original_image=results.get('original_image'),
-        inference_image=results.get('inference_image'),
-        cam_image=results.get('cam_image'),
-        g_scale_image=results.get('g_scale_image'),
-        sequence_image=results.get('sequence_image'),
-        detection_results=results.get('detection_results', [])
+        images=results.get('images', []),  # 이미지 리스트
+        image_count=results.get('total_images', 0)  # 세션에서 이미지 개수 가져오기
     )
 
 # @socketio.on('check_fiftyone_ready')
