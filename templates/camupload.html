@@ -50,6 +50,9 @@
 
                     <!-- 레이어 수 표시 -->
                     <div class="col text-center">
+                        <button type="button" class="btn btn-info me-2" onclick="visualizeModel()" id="visualizeButton" style="display: none;">
+                            Model Architecture
+                        </button>
                     </div>
 
                     <!-- Load Model 버튼 -->
@@ -389,6 +392,7 @@
             const modelName = document.getElementById('modelSelect').value;
             const useGpu = document.getElementById('useGpu').checked;
             const layerCountElement = document.getElementById('layerCount');
+            const visualizeButton = document.getElementById('visualizeButton');
             
             // 모델이 선택되지 않은 경우 처리
             if (!modelName) {
@@ -398,6 +402,7 @@
             
             // 로딩 상태 표시
             layerCountElement.textContent = 'Loading...';
+            visualizeButton.style.display = 'none';  // 버튼 숨기기
             
             // 백엔드 API 호출
             fetch('/api/model/load', {
@@ -418,12 +423,57 @@
                 } else {
                     // 레이어 수 업데이트
                     layerCountElement.textContent = `Layers: ${data.layer_count}`;
+                    visualizeButton.style.display = 'inline-block';  // 버튼 표시
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 layerCountElement.textContent = 'Error';
                 alert('Failed to load model');
+            });
+        }
+
+        function visualizeModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const visualizeButton = document.getElementById('visualizeButton');
+            
+            // 모델이 선택되지 않은 경우 처리
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            // 버튼 비활성화
+            visualizeButton.disabled = true;
+            
+            // 백엔드 API 호출
+            fetch('/api/model/visualize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    // 새 창에서 netron 시각화 열기
+                    window.open(data.url, '_blank');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to visualize model');
+            })
+            .finally(() => {
+                // 1초 후 버튼 다시 활성화
+                setTimeout(() => {
+                    visualizeButton.disabled = false;
+                }, 1000);
             });
         }
 

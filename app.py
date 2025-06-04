@@ -25,7 +25,6 @@ import atexit
 import json
 from tqdm import tqdm
 import shutil
-import psutil
 import platform
 
 from trainer import train_yolo
@@ -58,13 +57,6 @@ def is_wsl():
         pass
     return False
 
-def kill_process_on_port(port):
-    for proc in psutil.process_iter(['pid', 'name']):
-        for conn in proc.connections(kind='inet'):
-            if conn.laddr.port == port:
-                proc.terminate()
-                print(f"Terminated process {proc.info['name']} (PID: {proc.info['pid']}) using port {port}")
-                      
 parser = argparse.ArgumentParser()
 
 # parser.add_argument("--dataset_dir", type=str, required=True, help="Importing dataset path")
@@ -857,6 +849,65 @@ def load_model():
         return jsonify({
             'success': True,
             'layer_count': layer_count
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+
+@app.route('/api/model/visualize', methods=['POST'])
+def visualize_model():
+    import netron
+    import psutil
+    import subprocess
+    
+    def kill_netron_process(port):
+        try:
+            # netstat을 사용하여 포트를 사용하는 프로세스의 PID 찾기
+            cmd = f"lsof -i :{port} -t"
+            pid = subprocess.check_output(cmd, shell=True).decode().strip()
+            
+            if pid:
+                # netron 프로세스만 종료
+                if 'netron' in psutil.Process(int(pid)).name().lower():
+                    print(f"Found netron process (PID: {pid})")
+                    subprocess.run(f"kill {pid}", shell=True)
+                    print(f"Terminated netron process (PID: {pid})")
+                    return True
+        except subprocess.CalledProcessError:
+            # 포트를 사용하는 프로세스가 없는 경우
+            return False
+        except Exception as e:
+            print(f"Error killing process: {str(e)}")
+            return False
+        return False
+    
+    data = request.json
+    model_path = os.path.join('models', data['model_name'])
+    port = 8888
+    
+    try:
+        # 기존 netron 프로세스 종료
+        if kill_netron_process(port):
+            print(f"Successfully terminated existing netron process on port {port}")
+            time.sleep(1)  # 프로세스가 완전히 종료될 때까지 잠시 대기
+        
+        # netron 서버 시작 (비동기로 실행)
+        def start_netron():
+            netron.start(model_path, address=port, browse=False)
+        
+        # 별도의 스레드에서 netron 서버 시작
+        import threading
+        thread = threading.Thread(target=start_netron)
+        thread.daemon = True  # 메인 스레드가 종료되면 함께 종료
+        thread.start()
+        
+        # 서버가 시작될 때까지 잠시 대기
+        time.sleep(0.5)
+        
+        return jsonify({
+            'success': True,
+            'url': f'http://localhost:{port}'
         })
     except Exception as e:
         return jsonify({
