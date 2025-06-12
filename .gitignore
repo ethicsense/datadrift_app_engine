@@ -24,6 +24,7 @@ runs/
 
 # ignore model files
 models/
+notebooks/PyTorch_CIFAR10/
 
 # ignore datasets
 datasets/
