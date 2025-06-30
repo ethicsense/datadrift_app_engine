@@ -4,10 +4,13 @@
 # ignore DB, temporal data & log files
 db/
 static/cam_results/
+*.pcd
+*.zip
 
 # ignore libraries
 deep_text_recognition_benchmark
 datadoctor/yolo_cam/
+**/point-e/
 
 # ignore macOS files
 .DS_Store
@@ -25,11 +28,15 @@ runs/
 # ignore model files
 models/
 notebooks/PyTorch_CIFAR10/
+**/point_e_model_cache/
 
 # ignore datasets
 datasets/
 tlpdr3/
 datadoctor/datasets/
+**/birds_train/
+**/SUNRGBD/
+**/pointe_vehicles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import torch
 import sys
 import os
+
 def train_yolo(data_path, model_path, project="runs", name="exp", epochs=100, batch_size=16, img_size=640, learning_rate=0.001):
     print(f"""
     Starting YOLO training with parameters:
@@ -13,8 +14,16 @@ def train_yolo(data_path, model_path, project="runs", name="exp", epochs=100, ba
     - Learning rate: {learning_rate}
     """)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    # Mac MPS 지원 추가
+    if torch.backends.mps.is_available():
+        device = "mps"
+        print("Using Mac MPS (Metal Performance Shaders)")
+    elif torch.cuda.is_available():
+        device = "cuda"
+        print("Using CUDA")
+    else:
+        device = "cpu"
+        print("Using CPU")
 
     # project 경로 앞에 'logs' 추가
     project_path = os.path.join("logs", project)
