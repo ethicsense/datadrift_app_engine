@@ -127,7 +127,7 @@
 </head>
 <body>
     <div class="container-fluid result-container">
-        <h1 class="text-center mb-4">CAM Visualization Results</h1>
+        <h1 class="text-center mb-4">CAM Visualization Results - {{ project_name }}</h1>
         
         {% if images and images|length > 0 %}
         <!-- 이미지 선택 탭 -->
@@ -228,7 +228,7 @@
                                 <div class="layer-bar"
                                      data-layer="{{ layer_idx }}"
                                      onclick="selectLayer('{{ layer_idx }}', '{{ loop.index }}')"
-                                     style="width: calc(40vw / {{ images[0].total_layers }}); min-width: 28px; max-width: 48px; height: 40px;"
+                                     style="width: calc(40vw / '{{ images[0].total_layers }}'); min-width: 28px; max-width: 48px; height: 40px;"
                                 >
                                     <span class="layer-number">{{ layer_idx }}</span>
                                 </div>
@@ -241,7 +241,7 @@
                             {% for image in images %}
                             <div class="col-md-{{ 12 // images|length }}">
                                 <h5>Image {{ loop.index }} - Layer <span id="currentLayer{{ loop.index }}">1</span></h5>
-                                <img src="{{ url_for('static', filename='cam_results/' + image.file_name + '_layer_1.jpg'.replace('static/', '')) }}" 
+                                <img src="{{ url_for('static', filename='cam_results/' + project_name + '/' + image.file_name + '_layer_1.jpg') }}" 
                                      class="comparison-image" alt="Layer 1 Image {{ loop.index }}"
                                      id="layerImage{{ loop.index }}">
                             </div>
@@ -257,6 +257,13 @@
             No CAM results to display. Please upload and run CAM visualization first.
         </div>
         {% endif %}
+    </div>
+
+    <!-- 업로드 페이지로 돌아가기 버튼 -->
+    <div class="text-center mt-5 mb-4">
+        <a href="{{ url_for('cam_upload') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-arrow-left"></i> Go Back to Upload Page
+        </a>
     </div>
 
     <!-- 레이어 상세 보기 모달 -->
@@ -300,7 +307,7 @@
                     layerSpan.textContent = layerIdx;
                 }
                 
-                // 이미지 경로 업데이트
+                // 이미지 경로 업데이트 - 프로젝트 이름 포함
                 const currentPath = image.src.split('?')[0];
                 const newPath = currentPath.replace(/_layer_\d+/, `_layer_${layerIdx}`);
                 image.src = `${newPath}?t=${Date.now()}`;

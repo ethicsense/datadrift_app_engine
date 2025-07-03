@@ -32,9 +32,20 @@
 <body>
     <div class="container-fluid mt-5">
         <h1 class="page-title text-center">Data Sampler</h1>
+        <div class="help-text text-center mb-4" style="color: #6c757d; font-style: italic; max-width: 800px; margin: 0 auto;">
+            FiftyOne을 사용하여 데이터셋을 시각적으로 탐색하고 분석합니다.<br>데이터 샘플링과 뷰 관리를 통해 
+            모델 훈련에 최적화된 데이터셋을 구성할 수 있습니다.
+        </div>
         <div class="row no-gutters">
             <div class="col-12">
                 <div class="card">
+                    <div class="card-header">
+                        <h5>Dataset Visualization & Analysis</h5>
+                        <div class="help-text" style="font-size: 0.9rem; color: #6c757d; margin-top: 5px;">
+                            FiftyOne 인터페이스에서 데이터셋을 시각적으로 탐색하고 분석할 수 있습니다. 
+                            이미지, 라벨, 메타데이터를 확인하고 필터링하여 원하는 뷰를 생성하세요.
+                        </div>
+                    </div>
                     <div class="card-body">
                         <iframe id="fiftyone-iframe" src="http://localhost:{{ fiftyone_port_number or 8159 }}" width="100%" height="800px" frameborder="0"></iframe>
                     </div>
@@ -44,6 +55,12 @@
         <div class="row mt-4">
             <div class="col-md-8">
                 <div class="dropdown-container card mb-4">
+                    <div class="card-header">
+                        <h5>Export Dataset</h5>
+                        <div class="help-text" style="font-size: 0.9rem; color: #6c757d; margin-top: 5px;">
+                            FiftyOne에서 생성한 뷰를 선택하고 원하는 형식으로 데이터셋을 내보낼 수 있습니다.
+                        </div>
+                    </div>
                     <div class="card-body">
                         <form id="exportForm" action="/export" method="post">
                             <div class="form-group">
@@ -53,6 +70,9 @@
                                         <option value="{{ view }}">{{ view }}</option>
                                     {% endfor %}
                                 </select>
+                                <div class="help-text" style="font-size: 0.8rem; color: #6c757d;">
+                                    FiftyOne에서 생성한 뷰 중 내보낼 뷰를 선택하세요
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="format">포맷 선택:</label>
@@ -60,9 +80,15 @@
                                     <option value="FiftyOneDataset">FiftyOneDataset</option>
                                     <option value="YOLOv5Dataset">YOLOv5Dataset</option>
                                 </select>
+                                <div class="help-text" style="font-size: 0.8rem; color: #6c757d;">
+                                    데이터셋을 내보낼 형식을 선택하세요 (FiftyOne 또는 YOLOv5 형식)
+                                </div>
                             </div>
                             <div class="text-right">
                                 <button type="submit" class="btn btn-success">Export Dataset</button>
+                                <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: right; margin-top: 5px;">
+                                    선택된 뷰와 형식으로 데이터셋을 내보냅니다
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -71,6 +97,10 @@
             <div class="col-md-4 d-flex align-items-center justify-content-center">
                 <form action="train_page" method="get" style="width: 100%; height: 100%;">
                     <button type="submit" class="btn btn-warning btn-block" style="font-size: 2vw; width: 100%; height: 90%; font-weight: 600;">Move to Train Page</button>
+                    <div class="help-text text-center mt-2" style="font-size: 0.9rem; color: #6c757d;">
+                        데이터 분석이 완료되면 모델 훈련 페이지로 이동하여 
+                        샘플링된 데이터셋으로 모델을 훈련할 수 있습니다
+                    </div>
                 </form>
             </div>
         </div>

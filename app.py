@@ -924,9 +924,13 @@ def run_cam():
     if not files:
         return jsonify({'error': 'No images uploaded'}), 400
     
-    # 이미지 저장 경로 설정
-    output_dir = 'static/cam_results'
-    os.makedirs(output_dir, exist_ok=True)
+    # 프로젝트 이름 가져오기
+    project_name = request.form.get('projectName', 'default_project')
+    
+    # 이미지 저장 경로 설정 - 프로젝트별 디렉토리 생성
+    base_output_dir = 'static/cam_results'
+    project_output_dir = os.path.join(base_output_dir, project_name)
+    os.makedirs(project_output_dir, exist_ok=True)
     timestamp = time.strftime('%Y%m%d_%H%M%S')
 
     use_grayscale = request.form.get('useGrayscale') == 'true'
@@ -952,7 +956,7 @@ def run_cam():
         boxes, colors, names = parse_detections(results)
 
         # 원본 이미지 저장
-        original_path = f'{output_dir}/{file_name}_original.jpg'
+        original_path = f'{project_output_dir}/{file_name}_original.jpg'
         cv2.imwrite(original_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
 
         # 레이어 시퀀스 시각화 수행
@@ -960,13 +964,13 @@ def run_cam():
             model, rgb_img, img,
             cam_kwargs={'task': task},
             use_rgb=use_rgb,
-            output_dir=output_dir,
+            output_dir=project_output_dir,
             file_name=file_name
         )
 
         # 추론 결과 이미지 저장
         inference_img = draw_detections(boxes, colors, names, rgb_img)
-        inference_path = f'{output_dir}/{file_name}_inference.jpg'
+        inference_path = f'{project_output_dir}/{file_name}_inference.jpg'
         cv2.imwrite(inference_path, cv2.cvtColor(inference_img, cv2.COLOR_RGB2BGR))
 
         # 각 이미지의 결과 저장
@@ -990,7 +994,8 @@ def run_cam():
     # 세션에 결과 저장
     flask_session['cam_results'] = {
         'images': all_results,
-        'total_images': len(all_results)
+        'total_images': len(all_results),
+        'project_name': project_name
     }
     
     return jsonify({
@@ -1006,8 +1011,106 @@ def cam_result():
         
     return render_template('cam_result.html',
         images=results.get('images', []),  # 이미지 리스트
-        image_count=results.get('total_images', 0)  # 세션에서 이미지 개수 가져오기
+        image_count=results.get('total_images', 0),  # 세션에서 이미지 개수 가져오기
+        project_name=results.get('project_name', 'default_project')
     )
+
+@app.route('/api/project/check', methods=['POST'])
+def check_project_exists():
+    data = request.json
+    project_name = data.get('project_name', '')
+    
+    if not project_name:
+        return jsonify({'error': 'Project name is required'}), 400
+    
+    # 프로젝트 디렉토리 경로 확인
+    project_dir = os.path.join('static/cam_results', project_name)
+    exists = os.path.exists(project_dir)
+    
+    return jsonify({
+        'exists': exists,
+        'project_name': project_name
+    })
+
+@app.route('/api/project/list', methods=['GET'])
+def get_project_list():
+    base_dir = 'static/cam_results'
+    projects = []
+    
+    if os.path.exists(base_dir):
+        for project_name in os.listdir(base_dir):
+            project_dir = os.path.join(base_dir, project_name)
+            if os.path.isdir(project_dir):
+                # 프로젝트 디렉토리에서 original 이미지들 찾기
+                original_images = []
+                for file in os.listdir(project_dir):
+                    if file.endswith('_original.jpg'):
+                        original_images.append({
+                            'filename': file,
+                            'path': f'cam_results/{project_name}/{file}'
+                        })
+                
+                if original_images:  # original 이미지가 있는 프로젝트만 포함
+                    projects.append({
+                        'name': project_name,
+                        'original_images': original_images,
+                        'image_count': len(original_images)
+                    })
+    
+    return jsonify({'projects': projects})
+
+@app.route('/api/project/load', methods=['POST'])
+def load_existing_project():
+    data = request.json
+    project_name = data.get('project_name', '')
+    
+    if not project_name:
+        return jsonify({'error': 'Project name is required'}), 400
+    
+    project_dir = os.path.join('static/cam_results', project_name)
+    if not os.path.exists(project_dir):
+        return jsonify({'error': 'Project not found'}), 404
+    
+    # 프로젝트 디렉토리에서 결과 파일들 찾기
+    all_results = []
+    
+    # original 이미지들을 기준으로 결과 구성
+    for file in os.listdir(project_dir):
+        if file.endswith('_original.jpg'):
+            base_name = file.replace('_original.jpg', '')
+            
+            # 관련 파일들 확인
+            inference_file = f'{base_name}_inference.jpg'
+            sequence_file = f'{base_name}_layer_sequence.jpg'
+            
+            # 레이어 파일들 찾기
+            layer_files = []
+            for layer_file in os.listdir(project_dir):
+                if layer_file.startswith(base_name) and layer_file.endswith('.jpg') and 'layer_' in layer_file:
+                    layer_files.append(layer_file)
+            
+            # 결과 구성
+            image_result = {
+                'original_image': os.path.join(project_dir, file),
+                'inference_image': os.path.join(project_dir, inference_file) if os.path.exists(os.path.join(project_dir, inference_file)) else None,
+                'sequence_image': os.path.join(project_dir, sequence_file) if os.path.exists(os.path.join(project_dir, sequence_file)) else None,
+                'file_name': base_name,
+                'total_layers': len(layer_files),
+                'detection_results': []  # 기존 결과에서는 detection 결과를 저장하지 않았으므로 빈 배열
+            }
+            all_results.append(image_result)
+    
+    # 세션에 결과 저장
+    flask_session['cam_results'] = {
+        'images': all_results,
+        'total_images': len(all_results),
+        'project_name': project_name
+    }
+    
+    return jsonify({
+        'success': True,
+        'redirect_url': url_for('cam_result')
+    })
 
 # @socketio.on('check_fiftyone_ready')
 # def handle_check_fiftyone_ready():
