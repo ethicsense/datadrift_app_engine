@@ -22,6 +22,26 @@
             gap: 3rem;
             justify-content: center;
         }
+        .btn-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .btn-description {
+            margin-top: 1rem;
+            max-width: 300px;
+            padding: 0.5rem;
+            color: #6c757d;
+            line-height: 1.4;
+        }
+        .btn-description strong {
+            color: #495057;
+            font-size: 1.1rem;
+        }
+        .btn-description small {
+            font-size: 0.9rem;
+        }
         .btn-large {
             width: 300px;
             height: 300px;
@@ -135,12 +155,24 @@
             <h1>Diagnosis</h1>
         </div>
         <div class="btn-container">
-            <a href="{{ url_for('cam_upload') }}" class="btn btn-large cam-btn">
-                <span>C.A.M Vis</span>
-            </a>
-            <a href="{{ url_for('init_data') }}" class="btn btn-large sampler-btn">
-                <span>Train Pipeline</span>
-            </a>
+            <div class="btn-wrapper">
+                <a href="{{ url_for('cam_upload') }}" class="btn btn-large cam-btn">
+                    <span>C.A.M Vis</span>
+                </a>
+                <div class="btn-description">
+                    <small>이미지의 Class Activation Map을 생성하고 시각화합니다. 
+                    객체 탐지, 분류, 세그멘테이션 작업을 지원합니다.</small>
+                </div>
+            </div>
+            <div class="btn-wrapper">
+                <a href="{{ url_for('init_data') }}" class="btn btn-large sampler-btn">
+                    <span>Train Pipeline</span>
+                </a>
+                <div class="btn-description">
+                    <small>데이터 샘플링을 통해 모델 훈련을 위한 데이터셋을 구성하고 
+                    자동화된 훈련 파이프라인을 실행합니다.</small>
+                </div>
+            </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

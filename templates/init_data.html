@@ -31,20 +31,44 @@
         .btn-full-height {
             height: 100%; /* 버튼 높이 설정 */
         }
+        .custom-arrow {
+            stroke-width: 4;
+            stroke: currentColor;
+            fill: none;
+        }
     </style>
 </head>
 <body>
     <div class="container mt-5">
+        <!-- 뒤로가기 버튼 -->
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="goBack()" style="width: 70px; height: 70px; border-radius: 50%; padding: 0;">
+                <svg width="32" height="32" viewBox="0 0 24 24" class="custom-arrow">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        
         <div class="text-center mb-5">
             <h1 class="page-title">Data Sampler Tool</h1>
+            <div class="help-text" style="max-width: 800px; margin: 0 auto; color: #6c757d; font-style: italic;">
+                데이터 샘플링을 통해 모델 훈련을 위한 데이터셋을 구성하고 자동화된 훈련 파이프라인을 실행합니다.
+                Reference, Current, Predict 데이터를 업로드하여 통합 데이터셋을 생성할 수 있습니다.
+            </div>
         </div>
         <h3 class="mb-4">New Data Upload</h3>
+        <div class="help-text mb-3" style="color: #6c757d; font-style: italic;">
+            새로운 데이터셋을 업로드하고 처리합니다. 각 데이터 타입에 맞는 형식을 선택하여 업로드하세요.
+        </div>
         <form id="upload-form" action="upload" method="post" enctype="multipart/form-data">
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <div class="card">
                         <div class="card-header text-center">
                             Reference Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                훈련에 사용된 학습 데이터셋을 업로드하세요
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
@@ -63,6 +87,9 @@
                     <div class="card">
                         <div class="card-header text-center">
                             Current Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                최근 새로 수집한 데이터셋을 업로드하세요
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
@@ -81,6 +108,9 @@
                     <div class="card">
                         <div class="card-header text-center">
                             Predict Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                추론하고자 하는 목표 데이터셋을 업로드하세요
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
@@ -109,12 +139,18 @@
                             <button type="button" class="btn btn-success mb-3 btn-block" 
                                     style="padding: 15px 0; font-size: 1.2rem; font-weight: 600;" 
                                     onclick="submitForm()">Process & Load Dataset</button>
+                            <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center;">
+                                업로드된 데이터를 처리하고 통합 데이터셋을 생성합니다
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </form>
         <h3 class="mt-5" style="margin-bottom: 24px;">Built Dataset List</h3>
+        <div class="help-text mb-3" style="color: #6c757d; font-style: italic;">
+            이전에 생성된 데이터셋 목록입니다. 기존 데이터셋을 로드하거나 삭제할 수 있습니다.
+        </div>
         <form id="load-dataset-form" action="load_existing_dataset" method="post">
             <div class="form-group">
                 <div class="row">
@@ -127,9 +163,15 @@
                         <button type="button" class="btn btn-warning btn-block flex-grow-1"
                                 style="font-weight: 600;"
                                 onclick="submitLoadForm()">Load Dataset</button>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center; margin-bottom: 10px;">
+                            선택된 데이터셋을 로드합니다
+                        </div>
                         <button type="button" class="btn btn-danger btn-block flex-grow-1"
                                 style="font-weight: 600;"
                                 onclick="deleteDataset()">Delete Dataset</button>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center;">
+                            선택된 데이터셋을 삭제합니다
+                        </div>
                     </div>
                 </div>
                 <input type="hidden" id="selected-dataset" name="saved-datasets">
@@ -210,6 +252,12 @@
             } else {
                 alert('Please select a dataset to delete.');
             }
+        }
+
+        // 뒤로가기 함수
+        function goBack() {
+            // 홈 페이지로 이동
+            window.location.href = '/';
         }
     </script>
 </body>

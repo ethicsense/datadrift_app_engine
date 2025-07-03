@@ -158,7 +158,7 @@ class FiftyoneManager:
         # FiftyOne 세션 실행
         def run_fiftyone_session():
 
-            self.session = fo.launch_app(port=self.port)
+            self.session = fo.launch_app(port=self.port, remote=True)
             self.session.wait()
 
         # 스레드 생성 및 실행
