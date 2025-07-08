@@ -1,15 +1,20 @@
 # ignore fonts
 **/fonts/
 
+# ignore pypi requirements
+MANIFEST.in
+setup.py
+README_PYPI.md
+
 # ignore DB, temporal data & log files
-db/
-static/cam_results/
+flask_webapp/db/
+flask_webapp/static/cam_results/
 *.pcd
 *.zip
 
 # ignore libraries
 deep_text_recognition_benchmark
-datadoctor/yolo_cam/
+datadoctor_cli_test/yolo_cam/
 **/point-e/
 
 # ignore macOS files
@@ -33,7 +38,7 @@ notebooks/PyTorch_CIFAR10/
 # ignore datasets
 datasets/
 tlpdr3/
-datadoctor/datasets/
+datadoctor_cli_test/datasets/
 **/birds_train/
 **/SUNRGBD/
 **/pointe_vehicles/

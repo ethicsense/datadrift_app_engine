@@ -28,7 +28,7 @@ import shutil
 import platform
 
 from trainer import train_yolo
-from utils import TensorboardManager, FiftyoneManager, CaptureOutput, InputDataLoader, MilvusManager
+from flask_webapp.utils import TensorboardManager, FiftyoneManager, CaptureOutput, InputDataLoader, MilvusManager
 
 def get_milvus_manager(db_path):
     if 'milvus_manager' not in g:
