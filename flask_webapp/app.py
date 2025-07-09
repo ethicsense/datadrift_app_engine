@@ -28,7 +28,7 @@ import shutil
 import platform
 
 from trainer import train_yolo
-from flask_webapp.utils import TensorboardManager, FiftyoneManager, CaptureOutput, InputDataLoader, MilvusManager
+from utils import TensorboardManager, FiftyoneManager, CaptureOutput, InputDataLoader, MilvusManager
 
 def get_milvus_manager(db_path):
     if 'milvus_manager' not in g:
@@ -65,13 +65,15 @@ parser.add_argument("--port", type=int, default=8159, help="Port to run the Fift
 parser.add_argument("--db_path", type=str, default="DAE_data.db", help="Path to the Milvus database")
 # parser.add_argument("--dataset_type", type=str, default=None, help="dataset type (51, yolo)")
 
-args = parser.parse_args()
+# 기본값 설정 (import 시에는 기본값 사용)
+default_port = 8159
+default_db_path = "DAE_data.db"
 
 # 데이터셋 로드 및 세션 생성은 애플리케이션 시작 시 한 번만 수행
 tsb_runner = TensorboardManager(port=6006)
 atexit.register(tsb_runner.stop)
 
-fom_runner = FiftyoneManager(port=args.port)
+fom_runner = FiftyoneManager(port=default_port)
 fiftyone_thread = fom_runner.start()
 
 app = Flask(__name__, static_folder='static')
@@ -83,8 +85,38 @@ app.secret_key = os.urandom(24)
 capture_stream = CaptureOutput()
 sys.stdout = capture_stream
 
+def get_project_paths():
+    """flask_webapp 디렉토리 기준으로 주요 디렉토리 경로들을 반환합니다."""
+    flask_webapp_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    return {
+        'flask_webapp_dir': flask_webapp_dir,
+        'models_dir': os.path.join(flask_webapp_dir, 'models'),
+        'datasets_uploads': os.path.join(flask_webapp_dir, 'datasets', 'uploads'),
+        'datasets_exported': os.path.join(flask_webapp_dir, 'datasets', 'exported_datasets'),
+        'logs_dir': os.path.join(flask_webapp_dir, 'logs'),
+        'static_cam_results': os.path.join(flask_webapp_dir, 'static', 'cam_results')
+    }
+
 def init_app(app):
     app.model_storage = None
+    
+    # 프로젝트 경로 가져오기
+    paths = get_project_paths()
+    
+    # 필수 디렉토리들 확인 및 생성 (절대 경로 사용)
+    required_dirs = [
+        paths['models_dir'],
+        paths['datasets_uploads'],
+        paths['datasets_exported'],
+        paths['logs_dir'],
+        paths['static_cam_results']
+    ]
+    
+    for dir_path in required_dirs:
+        if not os.path.exists(dir_path):
+            print(f"Required directory not found. Creating directory: {dir_path}")
+            os.makedirs(dir_path, exist_ok=True)
 
 @app.route('/')
 def index():
@@ -108,7 +140,7 @@ def get_existing_datasets():
 def load_existing_dataset():
     dataset_name = request.form.get('saved-datasets')
     dataset = fo.load_dataset(dataset_name)
-    milvus_manager = get_milvus_manager(args.db_path)
+    milvus_manager = get_milvus_manager(default_db_path)
 
     embeddings_by_sample_id = fom_runner.collect_image_embeddings_by_sample_id(dataset, db_client=milvus_manager)
     results = fob.compute_visualization(
@@ -137,7 +169,7 @@ def delete_dataset():
         status_log = []
         
         try:
-            milvus_manager = get_milvus_manager(args.db_path)
+            milvus_manager = get_milvus_manager(default_db_path)
         except Exception as e:
             raise Exception(f"Failed to connect to Milvus: {str(e)}")
 
@@ -177,7 +209,8 @@ def delete_dataset():
 
 @app.route('/dsampler/upload', methods=['POST'])
 def upload_file():
-    UPLOAD_FOLDER = './datasets/uploads'
+    paths = get_project_paths()
+    UPLOAD_FOLDER = paths['datasets_uploads']
     ref_dataset = None
     cur_dataset = None
     test_dataset = None
@@ -433,7 +466,7 @@ def upload_file():
         print(f"Total embeddings to insert: {len(data)}")
 
         print("\nInserting Embeddings to Milvus...")
-        milvus_manager = get_milvus_manager(args.db_path)
+        milvus_manager = get_milvus_manager(default_db_path)
         milvus_manager.create_collection(merged_dataset.name)
         milvus_manager.insert(merged_dataset.name, data)
         print(f"Successfully inserted embeddings to Milvus collection: {merged_dataset.name}")
@@ -508,7 +541,8 @@ def export_selected_view():
             print("Error: The selected view contains 4 or fewer samples.")
             return jsonify({'error': 'The selected view contains 4 or fewer samples. Please select a view with more samples.'}), 400
 
-        view_export_dir = f"./datasets/exported_datasets/{fom_runner.session.dataset.name}_{selected_view}"
+        paths = get_project_paths()
+        view_export_dir = f"{paths['datasets_exported']}/{fom_runner.session.dataset.name}_{selected_view}"
         label_field = "ground_truth"
 
         # 전체 샘플을 train, val, test로 스플릿
@@ -555,20 +589,11 @@ def export_selected_view():
 
 @app.route('/dsampler/train_page', methods=['GET', 'POST'])
 def train_page():
+    paths = get_project_paths()
     # Exported datasets directory
-    export_dir = './datasets/exported_datasets/'
+    export_dir = paths['datasets_exported'] + '/'
     # Models directory
-    models_dir = './models/'
-
-    # exported_datasets 디렉토리가 없으면 생성
-    if not os.path.exists(export_dir):
-        print(f"Exported datasets directory not found. Creating directory: {export_dir}")
-        os.makedirs(export_dir)
-
-    # models 디렉토리가 없으면 생성
-    if not os.path.exists(models_dir):
-        print(f"Models directory not found. Creating directory: {models_dir}")
-        os.makedirs(models_dir)
+    models_dir = paths['models_dir'] + '/'
 
     # 데이터셋과 모델의 경로를 저장
     datasets = [d for d in os.listdir(export_dir) if os.path.isdir(os.path.join(export_dir, d))]
@@ -593,9 +618,10 @@ def train():
         flask_session['project'] = project
         flask_session['run'] = name
         
-        selected_dataset = "datasets/exported_datasets/" + request.form.get('selected_dataset') + '/dataset.yaml'
-        selected_model = "models/" + request.form.get('selected_model')
-        log_dir = "logs/" + project + "/" + name
+        paths = get_project_paths()
+        selected_dataset = f"{paths['datasets_exported']}/" + request.form.get('selected_dataset') + '/dataset.yaml'
+        selected_model = f"{paths['models_dir']}/" + request.form.get('selected_model')
+        log_dir = f"{paths['logs_dir']}/" + project + "/" + name
 
         # 별도의 스레드에서 훈련 시작 (파라미터 전달)
         training_thread = threading.Thread(
@@ -627,7 +653,8 @@ def train():
 def download_model():
     project = flask_session.get('project', 'runs')
     run = flask_session.get('run', 'exp')
-    model_path = f'logs/{project}/{run}/weights/best.pt'
+    paths = get_project_paths()
+    model_path = f"{paths['logs_dir']}/{project}/{run}/weights/best.pt"
     print()
     print(f"Downloading Model : {model_path}")
     print()
@@ -828,7 +855,8 @@ def visualize_layer_sequence(model, rgb_img, img, cam_kwargs, use_rgb, output_di
 
 @app.route('/camvis/upload_page')
 def cam_upload():
-    models = [m for m in os.listdir('./models')]
+    paths = get_project_paths()
+    models = [m for m in os.listdir(paths['models_dir'])]
     return render_template('camupload.html', models=models)
 
 @app.route('/api/model/load', methods=['POST'])
@@ -836,7 +864,8 @@ def load_model():
     from ultralytics import YOLO
 
     data = request.json
-    model_path = os.path.join('models', data['model_name'])
+    paths = get_project_paths()
+    model_path = os.path.join(paths['models_dir'], data['model_name'])
     use_gpu = data['use_gpu']
     
     try:
@@ -883,7 +912,8 @@ def visualize_model():
         return False
     
     data = request.json
-    model_path = os.path.join('models', data['model_name'])
+    paths = get_project_paths()
+    model_path = os.path.join(paths['models_dir'], data['model_name'])
     port = 8888
     
     try:
@@ -928,7 +958,8 @@ def run_cam():
     project_name = request.form.get('projectName', 'default_project')
     
     # 이미지 저장 경로 설정 - 프로젝트별 디렉토리 생성
-    base_output_dir = 'static/cam_results'
+    paths = get_project_paths()
+    base_output_dir = paths['static_cam_results']
     project_output_dir = os.path.join(base_output_dir, project_name)
     os.makedirs(project_output_dir, exist_ok=True)
     timestamp = time.strftime('%Y%m%d_%H%M%S')
@@ -1024,7 +1055,8 @@ def check_project_exists():
         return jsonify({'error': 'Project name is required'}), 400
     
     # 프로젝트 디렉토리 경로 확인
-    project_dir = os.path.join('static/cam_results', project_name)
+    paths = get_project_paths()
+    project_dir = os.path.join(paths['static_cam_results'], project_name)
     exists = os.path.exists(project_dir)
     
     return jsonify({
@@ -1034,7 +1066,8 @@ def check_project_exists():
 
 @app.route('/api/project/list', methods=['GET'])
 def get_project_list():
-    base_dir = 'static/cam_results'
+    paths = get_project_paths()
+    base_dir = paths['static_cam_results']
     projects = []
     
     if os.path.exists(base_dir):
@@ -1067,7 +1100,7 @@ def load_existing_project():
     if not project_name:
         return jsonify({'error': 'Project name is required'}), 400
     
-    project_dir = os.path.join('static/cam_results', project_name)
+    project_dir = os.path.join(paths['static_cam_results'], project_name)
     if not os.path.exists(project_dir):
         return jsonify({'error': 'Project not found'}), 404
     
@@ -1122,5 +1155,14 @@ def load_existing_project():
 #         emit('fiftyone_ready', {'status': 'not_ready'})
 
 if __name__ == "__main__":
+    # argparse 처리 (직접 실행할 때만)
+    args = parser.parse_args()
+    default_port = args.port
+    default_db_path = args.db_path
+    
+    # 기본값 업데이트
+    fom_runner = FiftyoneManager(port=default_port)
+    fiftyone_thread = fom_runner.start()
+    
     init_app(app)
     socketio.run(app, port=5555, debug=False)
