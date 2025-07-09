@@ -34,7 +34,7 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
     
     # 컨텐츠 초기화
     database_content = ''
-    drift_content = ''
+    image_drift_content = ''
     image_analysis_content = ''
     
     # 데이터베이스 리포트 생성
@@ -48,7 +48,7 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
     
     # 드리프트 분석 리포트 생성
     if drift_export_report:
-        drift_content = get_cached_html_content(
+        image_drift_content = get_cached_html_content(
             f"drift_html_{dataset_name}",
             drift_export_report.generate_html_from_session,
             dataset_directory=dataset_directory
@@ -78,17 +78,17 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
     # 이미지 분석 섹션 (항상 표시, 데이터가 없으면 안내 메시지)
     sections.append(f"""
     <div class="section">
-        <div class="section-title">🖼️ Image Analysis Results</div>
+        <div class="section-title">🖼️ Image Attributes Analysis Results</div>
         {image_analysis_content}
     </div>
     """)
     
     # 드리프트 분석 섹션
-    if drift_content:
+    if image_drift_content:
         sections.append(f"""
         <div class="section">
             <div class="section-title">🔍 Data Drift Analysis Results</div>
-            {drift_content}
+            {image_drift_content}
         </div>
         """)
     

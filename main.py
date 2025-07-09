@@ -67,7 +67,7 @@ def calculate_hash(file_path):
 
     return hasher.hexdigest()
 
-def run_data_analysis(directories, formats):
+def run_analysis(directories, formats):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     print("Loading Embedding Model...")
@@ -150,7 +150,7 @@ def run_data_analysis(directories, formats):
         print(f"Cache location: {cache_manager.cache_dir}")
 
 
-def run_drift_analysis(directories, mode):
+def run_comparison(directories, mode):
     pass
 
 
@@ -168,7 +168,7 @@ def run_report(directory, mode):
             dataset_name = os.path.basename(directory)
             
             # 1. 이미지 분석 HTML 본문 생성 및 캐시에 저장
-            from report_gen.create_report import create_report_body
+            from report_generator.create_report import create_report_body
             html_body = create_report_body(directory)
             if html_body:
                 # 캐시 매니저를 사용하여 HTML 본문을 캐시에 저장
@@ -181,7 +181,7 @@ def run_report(directory, mode):
                 print(f"Cache key: {body_cache_key}")
             
             # 2. report_layout.py의 generate_combined_html 함수 사용하여 완전한 HTML 생성
-            from report_gen.report_layout import generate_combined_html
+            from report_generator.report_layout import generate_combined_html
             
             # 완전한 HTML 보고서 생성
             complete_html = generate_combined_html(
@@ -223,9 +223,35 @@ def run_report(directory, mode):
         print("Please use 'html' mode for now.")
 
 
+def run_webapp(port=5555, debug=False):
+    """Flask 웹앱을 실행합니다."""
+    try:
+        # flask_webapp 디렉토리를 Python 경로에 추가
+        flask_webapp_dir = os.path.join(os.path.dirname(__file__), 'flask_webapp')
+        sys.path.insert(0, flask_webapp_dir)
+        
+        # app.py에서 Flask 앱 import
+        import app
+        
+        print(f"Starting Flask web application on port {port}...")
+        print(f"Debug mode: {debug}")
+        print(f"Access the application at: http://localhost:{port}")
+        
+        # Flask 앱 실행
+        app.socketio.run(app.app, port=port, debug=debug)
+        
+    except ImportError as e:
+        print(f"Error importing Flask app: {e}")
+        print("Make sure flask_webapp/app.py exists and all dependencies are installed.")
+        print(f"Flask webapp directory: {flask_webapp_dir}")
+        print(f"Available files in flask_webapp: {os.listdir(flask_webapp_dir) if os.path.exists(flask_webapp_dir) else 'Directory not found'}")
+    except Exception as e:
+        print(f"Error starting Flask web application: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Analyze images, compare datasets, or create reports in directories.',
+        description='Analyze images, compare datasets, create reports, or run web application.',
         usage='ddoc <command> [options]',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=False,
@@ -250,23 +276,12 @@ def main():
     parser_report.add_argument('directory', help='Directory to create a report for.')
     parser_report.add_argument('--mode', choices=['streamlit', 'pdf', 'html'], default='html', help='Mode to generate report: streamlit, pdf, or html.')
 
-    args, unknown = parser.parse_known_args()
+    # Webapp sub-command
+    parser_app = subparsers.add_parser('app', help='Run the Flask web application.')
+    parser_app.add_argument('--port', type=int, default=5555, help='Port to run the web application on.')
+    parser_app.add_argument('--debug', action='store_true', help='Run in debug mode.')
 
-    if '-h' in unknown or '--help' in unknown:
-        print("""
-        usage: ddoc <command> [options]
-
-        Analyze images, compare datasets, or create reports in directories.
-
-        Commands:
-          analysis    Analyze images in directories.
-          compare     Compare datasets in directories.
-          report      Create a report for a directory.
-
-        Options:
-          -h, --help  show this help message and exit
-        """)
-        return
+    args = parser.parse_args()
 
     if args.command == 'analysis':
         if args.root:
@@ -276,7 +291,7 @@ def main():
             else:
                 # Combine -r with directories
                 args.directories = [os.path.join(args.root, d) for d in args.directories]
-        run_data_analysis(args.directories, args.format)
+        run_analysis(args.directories, args.format)
 
     elif args.command == 'compare':
         if args.root:
@@ -286,12 +301,15 @@ def main():
             else:
                 # Combine -r with directories
                 args.directories = [os.path.join(args.root, d) for d in args.directories]
-        run_drift_analysis(args.directories, args.mode)
+        run_comparison(args.directories, args.mode)
 
     elif args.command == 'report':
         if args.root:
             args.directory = os.path.join(args.root, args.directory)
         run_report(args.directory, args.mode)
+
+    elif args.command == 'app':
+        run_webapp(args.port, args.debug)
 
 
 if __name__ == '__main__':
