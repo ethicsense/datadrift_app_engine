@@ -1006,9 +1006,9 @@ def run_cam():
 
         # 각 이미지의 결과 저장
         image_result = {
-            'original_image': original_path,
-            'inference_image': inference_path,
-            'sequence_image': sequence_path,
+            'original_image': f'cam_results/{project_name}/{file_name}_original.jpg',
+            'inference_image': f'cam_results/{project_name}/{file_name}_inference.jpg',
+            'sequence_image': f'cam_results/{project_name}/{file_name}_layer_sequence.jpg',
             'detection_results': [
                 {
                     'class_name': result.names[int(result.boxes.cls[0])],
@@ -1100,6 +1100,8 @@ def load_existing_project():
     if not project_name:
         return jsonify({'error': 'Project name is required'}), 400
     
+    # 프로젝트 경로 가져오기
+    paths = get_project_paths()
     project_dir = os.path.join(paths['static_cam_results'], project_name)
     if not os.path.exists(project_dir):
         return jsonify({'error': 'Project not found'}), 404
@@ -1124,9 +1126,9 @@ def load_existing_project():
             
             # 결과 구성
             image_result = {
-                'original_image': os.path.join(project_dir, file),
-                'inference_image': os.path.join(project_dir, inference_file) if os.path.exists(os.path.join(project_dir, inference_file)) else None,
-                'sequence_image': os.path.join(project_dir, sequence_file) if os.path.exists(os.path.join(project_dir, sequence_file)) else None,
+                'original_image': f'cam_results/{project_name}/{file}',
+                'inference_image': f'cam_results/{project_name}/{inference_file}' if os.path.exists(os.path.join(project_dir, inference_file)) else None,
+                'sequence_image': f'cam_results/{project_name}/{sequence_file}' if os.path.exists(os.path.join(project_dir, sequence_file)) else None,
                 'file_name': base_name,
                 'total_layers': len(layer_files),
                 'detection_results': []  # 기존 결과에서는 detection 결과를 저장하지 않았으므로 빈 배열
