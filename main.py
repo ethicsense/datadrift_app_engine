@@ -24,6 +24,37 @@ import subprocess
 # 캐시 매니저 import
 from cache_utils.cache_manager import get_cache_manager, save_analysis_data, get_cached_analysis_data
 
+# 데이터 유틸리티 import
+from data_utils import run_attribute_analysis
+
+
+def calculate_file_hash(file_path):
+    """파일의 MD5 해시를 계산합니다."""
+    import hashlib
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        buf = f.read()
+        hasher.update(buf)
+    return hasher.hexdigest()
+
+
+def calculate_cache_hash(cache_data):
+    """캐시 데이터의 해시를 계산합니다."""
+    import hashlib
+    import json
+    hasher = hashlib.md5()
+    
+    # 파일명과 해시만 사용하여 캐시 해시 계산
+    file_hashes = {}
+    for file_name, data in cache_data.items():
+        if 'hash' in data:
+            file_hashes[file_name] = data['hash']
+    
+    # 정렬된 딕셔너리를 JSON으로 변환하여 해시 계산
+    sorted_data = json.dumps(file_hashes, sort_keys=True)
+    hasher.update(sorted_data.encode())
+    return hasher.hexdigest()
+
 
 def calculate_mmd_batch(X, Y, batch_size=1000, gamma=None):
     batch_size = min(batch_size, min(len(X), len(Y)))
@@ -59,95 +90,210 @@ def calculate_mmd_batch(X, Y, batch_size=1000, gamma=None):
 
     return np.sqrt(max(mmd, 0))
 
-def calculate_hash(file_path):
-    hasher = hashlib.md5()
-    with open(file_path, 'rb') as f:
-        buf = f.read()
-        hasher.update(buf)
 
-    return hasher.hexdigest()
-
-def run_analysis(directories, formats):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-    print("Loading Embedding Model...")
-    model, preprocess = clip.load("ViT-B/16", device=device)
-
+def run_attribute_analysis_wrapper(directories, formats):
+    """
+    속성 분석을 수행하고 캐시에 저장합니다.
+    디렉토리 탐색하면서 파일을 바로 처리합니다.
+    """
+    print("Starting attribute analysis...")
+    
+    # 분석 모듈 한 번만 로드
+    from data_utils import AttributeAnalyzer
+    analyzer = AttributeAnalyzer()
+    
     for directory in directories:
         if not os.path.exists(directory):
             print(f"Error: Directory {directory} does not exist.")
-            sys.exit(1)
-        
-        print(f"\nAnalyzing images in directory: {directory}\n")
+            continue
         
         # 캐시 매니저 사용
         cache_manager = get_cache_manager(directory)
         
         # 기존 캐시 로드
         existing_cache = get_cached_analysis_data(directory, "image_analysis") or {}
+        
+        print(f"\nAnalyzing directory: {directory}")
+        
         new_cache = {}
-        format_count = 0
-
-        for root, _, files in os.walk(directory):
-            for file in files:
-                if file.endswith(tuple(formats)):
-                    format_count += 1
-        print(f"Found {format_count} datas in {directory}\n")
-
+        total_files = 0
+        processed_files = 0
+        
+        # 디렉토리 탐색하면서 바로 처리
         for root, _, files in os.walk(directory):
             for file in files:
                 if file.endswith(tuple(formats)):
                     file_path = os.path.join(root, file)
-                    file_hash = calculate_hash(file_path)
-
-                    if file in existing_cache and existing_cache[file]['hash'] == file_hash:
-                        print(f"Skipping unchanged file: {file_path}")
-                        continue
-
-                    try:
-                        with Image.open(file_path) as img:
-                            # 임베딩 추출
-                            with torch.no_grad():
-                                print(f"Embedding {file_path}...")
-                                input = preprocess(img).unsqueeze(0).to(device)
-                                embedding = model.encode_image(input).cpu().numpy().flatten()
-
-                            # 기본 메타데이터
-                            file_size_bytes = os.path.getsize(file_path)
-                            file_size_mb = file_size_bytes / (1024 * 1024)  # Convert to MB
-                            image_format = img.format
-                            width, height = img.size
-                            resolution = f"{width}x{height}"
-
-                            # 이미지 데이터 분석
-                            image_array = img_as_float(io.imread(file_path, as_gray=True))
-                            noise_level = np.std(image_array)
-                            sharpness = filters.sobel(image_array).mean()
-
-                            # 결과 저장
-                            new_cache[file] = {
-                                'hash': file_hash,
-                                'path': os.path.abspath(file_path),
-                                'size': file_size_mb,
-                                'format': image_format,
-                                'resolution': resolution,
-                                'noise_level': noise_level,
-                                'sharpness': sharpness,
-                                'embedding': embedding.tolist()
-                            }
+                    total_files += 1
+                    
+                    # 캐시 확인
+                    need_analysis = False
+                    if file not in existing_cache:
+                        need_analysis = True
+                    else:
+                        # 해시 확인
+                        current_hash = calculate_file_hash(file_path)
+                        if existing_cache[file]['hash'] != current_hash:
+                            need_analysis = True
+                    
+                    if need_analysis:
+                        print(f"Analyzing {file}...")
+                        result = analyzer.analyze_image_attributes(file_path)
+                        
+                        if result:
+                            new_cache[file] = result
+                            processed_files += 1
                             print(f"Processed {file}")
-
-                    except Exception as e:
-                        print(f"Error processing {file_path}: {e}")
-
+                        else:
+                            print(f"Failed to process {file}")
+                    else:
+                        print(f"Skipping unchanged file: {file}")
+        
+        print(f"Total files found: {total_files}")
+        print(f"Files processed: {processed_files}")
+        print(f"Files in cache: {len(existing_cache)}")
+        
+        if not new_cache:
+            print("All files are up to date in cache.")
+            continue
+        
         # 기존 캐시와 새 캐시 병합
         existing_cache.update(new_cache)
         
         # 캐시에 저장
         save_analysis_data(directory, existing_cache, "image_analysis")
         
-        print(f"\nSaved cache to {directory}")
+        print(f"\nSaved attribute analysis cache to {directory}")
         print(f"Cache location: {cache_manager.cache_dir}")
+        print(f"Total files in cache: {len(existing_cache)}")
+        print(f"New files processed: {len(new_cache)}")
+
+
+def run_drift_analysis(directories, formats, model=None, device=None, n_clusters=None, method='kmeans'):
+    """
+    임베딩 추출과 클러스터링 분석을 수행하고 캐시에 저장합니다.
+    디렉토리 탐색하면서 파일을 바로 처리합니다.
+    """
+    print("Starting drift analysis (embedding extraction and clustering)...")
+    
+    # 분석 모듈 한 번만 로드
+    from data_utils import EmbeddingManager
+    manager = EmbeddingManager(device)
+    manager.load_model("ViT-B/16")
+    
+    for directory in directories:
+        if not os.path.exists(directory):
+            print(f"Error: Directory {directory} does not exist.")
+            continue
+        
+        # 캐시 매니저 사용
+        cache_manager = get_cache_manager(directory)
+        
+        # 기존 캐시 로드
+        existing_cache = get_cached_analysis_data(directory, "image_drift_content") or {}
+        
+        print(f"\nExtracting embeddings for directory: {directory}")
+        
+        new_cache = {}
+        total_files = 0
+        processed_files = 0
+        
+        # 디렉토리 탐색하면서 바로 처리
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.endswith(tuple(formats)):
+                    file_path = os.path.join(root, file)
+                    total_files += 1
+                    
+                    # 캐시 확인
+                    need_analysis = False
+                    if file not in existing_cache:
+                        need_analysis = True
+                    else:
+                        # 해시 확인
+                        current_hash = calculate_file_hash(file_path)
+                        if existing_cache[file]['hash'] != current_hash:
+                            need_analysis = True
+                    
+                    if need_analysis:
+                        print(f"Extracting embedding for {file}...")
+                        result = manager.extract_embedding(file_path)
+                        
+                        if result:
+                            new_cache[file] = result
+                            processed_files += 1
+                            print(f"Processed {file}")
+                        else:
+                            print(f"Failed to process {file}")
+                    else:
+                        print(f"Skipping unchanged file: {file}")
+        
+        print(f"Total files found: {total_files}")
+        print(f"Files processed: {processed_files}")
+        print(f"Files in cache: {len(existing_cache)}")
+        
+        if not new_cache:
+            print("All files are up to date in cache.")
+        else:
+            # 기존 캐시와 새 캐시 병합
+            existing_cache.update(new_cache)
+            
+            # 캐시에 저장
+            save_analysis_data(directory, existing_cache, "image_drift_content")
+            
+            print(f"\nSaved embedding extraction cache to {directory}")
+            print(f"Cache location: {cache_manager.cache_dir}")
+            print(f"Total files in cache: {len(existing_cache)}")
+            print(f"New files processed: {len(new_cache)}")
+        
+        # 클러스터링 분석 수행
+        print(f"\nStarting clustering analysis for {directory}")
+        
+        # 기존 클러스터링 캐시 로드
+        existing_clustering_cache = get_cached_analysis_data(directory, "clustering_analysis") or {}
+        
+        # 클러스터링 재수행 여부 확인
+        # 임베딩 데이터의 해시를 기반으로 클러스터링 캐시의 유효성 검사
+        embedding_hash = calculate_cache_hash(existing_cache)
+        clustering_hash = existing_clustering_cache.get('_embedding_hash', '')
+        
+        if embedding_hash == clustering_hash and existing_clustering_cache:
+            print(f"Clustering cache is up to date for {directory}")
+        else:
+            print(f"Recomputing clustering for {directory}")
+            
+            # 임베딩 데이터 수집
+            embeddings = []
+            file_paths = []
+            file_names = []
+            
+            for file_name, data in existing_cache.items():
+                if 'embedding' in data:
+                    embeddings.append(data['embedding'])
+                    file_paths.append(data['path'])
+                    file_names.append(file_name)
+            
+            if len(embeddings) < 2:
+                print(f"Not enough data for clustering in {directory}")
+                continue
+            
+            # 클러스터링 분석 수행
+            clustering_result = manager.perform_clustering(embeddings, file_names, file_paths, n_clusters, method)
+            
+            if clustering_result:
+                # 임베딩 해시를 클러스터링 결과에 추가
+                clustering_result['clustering_results']['_embedding_hash'] = embedding_hash
+                
+                # 클러스터링 결과를 캐시에 저장
+                save_analysis_data(directory, clustering_result['clustering_results'], "clustering_analysis")
+                
+                print(f"\nSaved clustering analysis cache to {directory}")
+                print(f"Cache location: {cache_manager.cache_dir}")
+                print(f"Method: {clustering_result['method']}")
+                print(f"Number of clusters: {clustering_result['n_clusters']}")
+                print(f"Total samples: {clustering_result['total_samples']}")
+            else:
+                print(f"Failed to perform clustering analysis for {directory}")
 
 
 def run_comparison(directories, mode):
@@ -263,6 +409,8 @@ def main():
     parser_analysis.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_analysis.add_argument('directories', nargs='*', help='Directory to analyze.')
     parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
+    parser_analysis.add_argument('--method', choices=['kmeans', 'dbscan', 'hierarchical'], default='kmeans', help='Clustering method to use.')
+    parser_analysis.add_argument('--n-clusters', type=int, help='Number of clusters (auto-determined if not specified).')
 
     # Compare sub-command
     parser_compare = subparsers.add_parser('compare', help='Compare datasets in directories.')
@@ -291,7 +439,8 @@ def main():
             else:
                 # Combine -r with directories
                 args.directories = [os.path.join(args.root, d) for d in args.directories]
-        run_analysis(args.directories, args.format)
+        run_attribute_analysis_wrapper(args.directories, args.format)
+        run_drift_analysis(args.directories, args.format, args.n_clusters, args.method)
 
     elif args.command == 'compare':
         if args.root:

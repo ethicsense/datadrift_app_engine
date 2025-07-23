@@ -34,11 +34,22 @@ class ImageAnalysisReport:
     def __init__(self, directory):
         self.directory = directory
         self.data = self.load_data()
+        self.clustering_data = self.load_clustering_data()
         
     def load_data(self):
         """캐시된 분석 데이터를 로드합니다."""
         # 캐시 매니저에서 데이터 로드
         cached_data = get_cached_analysis_data(self.directory, "image_analysis")
+        if cached_data is not None:
+            return cached_data
+        
+        # 캐시에 데이터가 없으면 빈 딕셔너리 반환
+        return {}
+    
+    def load_clustering_data(self):
+        """캐시된 클러스터링 분석 데이터를 로드합니다."""
+        # 캐시 매니저에서 클러스터링 데이터 로드
+        cached_data = get_cached_analysis_data(self.directory, "clustering_analysis")
         if cached_data is not None:
             return cached_data
         
@@ -178,7 +189,92 @@ class ImageAnalysisReport:
             charts['embeddings_pca'] = self.fig_to_base64()
             plt.close()
         
+        # 6. 클러스터링 결과 시각화 (클러스터링 데이터가 있는 경우)
+        if self.clustering_data and 'embeddings_2d' in self.clustering_data:
+            embeddings_2d = np.array(self.clustering_data['embeddings_2d'])
+            cluster_labels = np.array(self.clustering_data['cluster_labels'])
+            method = self.clustering_data.get('method', 'Unknown')
+            n_clusters = self.clustering_data.get('n_clusters', 0)
+            
+            plt.figure(figsize=(12, 8))
+            scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
+                                c=cluster_labels, cmap='viridis', alpha=0.6)
+            
+            # 클러스터 중심점 표시 (centroids 사용)
+            if 'centroids' in self.clustering_data and self.clustering_data['centroids']:
+                centroids = np.array(self.clustering_data['centroids'])
+                # PCA를 사용하여 2D로 변환
+                pca_components = np.array(self.clustering_data['pca_components'])
+                centroids_2d = centroids @ pca_components.T
+                plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], 
+                           c='red', marker='x', s=200, linewidths=3, label='Cluster Centroids')
+            
+            plt.title(f'Clustering Results - {method.upper()} ({n_clusters} clusters)', fontsize=14, fontweight='bold')
+            plt.xlabel('PC1')
+            plt.ylabel('PC2')
+            plt.colorbar(scatter, label='Cluster')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            charts['clustering_results'] = self.fig_to_base64()
+            plt.close()
+            
+            # 7. 클러스터 크기 분포
+            if 'cluster_stats' in self.clustering_data:
+                cluster_sizes = []
+                cluster_names = []
+                for i in range(n_clusters):
+                    cluster_key = f'cluster_{i}'
+                    if cluster_key in self.clustering_data['cluster_stats']:
+                        cluster_sizes.append(self.clustering_data['cluster_stats'][cluster_key]['size'])
+                        cluster_names.append(f'Cluster {i}')
+                
+                plt.figure(figsize=(10, 6))
+                plt.bar(cluster_names, cluster_sizes, color='lightcoral', alpha=0.7)
+                plt.title('Cluster Size Distribution', fontsize=14, fontweight='bold')
+                plt.xlabel('Cluster')
+                plt.ylabel('Number of Images')
+                plt.xticks(rotation=45)
+                plt.grid(True, alpha=0.3)
+                
+                # 값 표시
+                for i, v in enumerate(cluster_sizes):
+                    plt.text(i, v + max(cluster_sizes) * 0.01, str(v), ha='center', va='bottom')
+                
+                charts['cluster_size_distribution'] = self.fig_to_base64()
+                plt.close()
+        
         return charts
+    
+    def create_clustering_summary(self):
+        """클러스터링 분석 결과 요약을 생성합니다."""
+        if not self.clustering_data:
+            return {}
+        
+        method = self.clustering_data.get('method', 'Unknown')
+        n_clusters = self.clustering_data.get('n_clusters', 0)
+        total_samples = len(self.clustering_data.get('file_names', []))
+        
+        cluster_stats = self.clustering_data.get('cluster_stats', {})
+        cluster_summary = []
+        
+        for i in range(n_clusters):
+            cluster_key = f'cluster_{i}'
+            if cluster_key in cluster_stats:
+                size = cluster_stats[cluster_key]['size']
+                percentage = (size / total_samples * 100) if total_samples > 0 else 0
+                cluster_summary.append({
+                    'cluster_id': i,
+                    'size': size,
+                    'percentage': percentage,
+                    'sample_files': cluster_stats[cluster_key]['files'][:5]  # 상위 5개 파일만
+                })
+        
+        return {
+            'method': method,
+            'n_clusters': n_clusters,
+            'total_samples': total_samples,
+            'cluster_summary': cluster_summary
+        }
     
     def fig_to_base64(self):
         """matplotlib figure를 base64 인코딩된 이미지로 변환합니다."""
@@ -327,6 +423,24 @@ class ImageAnalysisReport:
             </div>
                 """)
             
+            # 클러스터링 결과
+            if 'clustering_results' in charts:
+                html_parts.append(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <h4 style="color: #495057; margin-bottom: 10px;">Clustering Results</h4>
+                <img src="data:image/png;base64,{charts['clustering_results']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            </div>
+                """)
+            
+            # 클러스터 크기 분포
+            if 'cluster_size_distribution' in charts:
+                html_parts.append(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <h4 style="color: #495057; margin-bottom: 10px;">Cluster Size Distribution</h4>
+                <img src="data:image/png;base64,{charts['cluster_size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            </div>
+                """)
+            
             html_parts.append("""
         </div>
             """)
@@ -460,6 +574,66 @@ class ImageAnalysisReport:
             </div>
         </div>
             """)
+        
+        # 8. 클러스터링 요약 섹션 (클러스터링 데이터가 있는 경우)
+        clustering_summary = self.create_clustering_summary()
+        if clustering_summary:
+            html_parts.append("""
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 Clustering Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Method</h4>
+                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('method', 'N/A').upper()}</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Samples</h4>
+                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('total_samples', 0):,}</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Clusters</h4>
+                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('n_clusters', 0)}</div>
+                </div>
+            </div>
+        </div>
+            """)
+            
+            # 클러스터 상세 테이블
+            if clustering_summary.get('cluster_summary'):
+                html_parts.append("""
+            <div style="margin-top: 20px;">
+                <h4 style="color: #495057; margin-bottom: 10px;">Cluster Details</h4>
+                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; border-radius: 5px; overflow: hidden; background: white;">
+                    <thead>
+                        <tr>
+                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Cluster ID</th>
+                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Size</th>
+                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Percentage</th>
+                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Sample Files</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """)
+                
+                for cluster in clustering_summary['cluster_summary']:
+                    html_parts.append(f"""
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['cluster_id']}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['size']:,}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['percentage']:.1f}%</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">
+                                <ul style="margin: 0; padding-left: 20px; list-style-type: none;">
+                                    {', '.join([f'<li>{f}' for f in cluster['sample_files']])}
+                                </ul>
+                            </td>
+                        </tr>
+                    """)
+                
+                html_parts.append("""
+                    </tbody>
+                </table>
+            </div>
+                """)
         
         return ''.join(html_parts)
 
