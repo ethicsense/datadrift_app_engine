@@ -400,7 +400,6 @@ def main():
         description='Analyze images, compare datasets, create reports, or run web application.',
         usage='ddoc <command> [options]',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False,
     )
     subparsers = parser.add_subparsers(dest='command', help='')
 
