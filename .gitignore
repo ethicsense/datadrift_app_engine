@@ -14,7 +14,7 @@ flask_webapp/static/cam_results/
 
 # ignore libraries
 deep_text_recognition_benchmark
-datadoctor_cli_test/yolo_cam/
+yolo_cam/
 **/point-e/
 
 # ignore macOS files

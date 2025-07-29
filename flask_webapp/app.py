@@ -757,9 +757,9 @@ def visualize_layer_sequence(model, rgb_img, img, cam_kwargs, use_rgb, output_di
     Returns:
         str: 저장된 시퀀스 이미지의 경로
     """
-    from datadoctor.yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
-    from datadoctor.yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
-    from datadoctor.yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
+    from yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
+    from yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
+    from yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
