@@ -173,6 +173,8 @@ def run_drift_analysis(directories, formats, model=None, device=None, n_clusters
     """
     임베딩 추출과 클러스터링 분석을 수행하고 캐시에 저장합니다.
     디렉토리 탐색하면서 파일을 바로 처리합니다.
+
+    methods = ['kmeans', 'dbscan', 'hierarchical']
     """
     print("Starting drift analysis (embedding extraction and clustering)...")
     
@@ -296,6 +298,10 @@ def run_drift_analysis(directories, formats, model=None, device=None, n_clusters
                 print(f"Failed to perform clustering analysis for {directory}")
 
 
+def run_xai_analysis(directories, formats, model=None, device=None):
+
+    
+
 def run_comparison(directories, mode):
     pass
 
@@ -408,8 +414,6 @@ def main():
     parser_analysis.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_analysis.add_argument('directories', nargs='*', help='Directory to analyze.')
     parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
-    parser_analysis.add_argument('--method', choices=['kmeans', 'dbscan', 'hierarchical'], default='kmeans', help='Clustering method to use.')
-    parser_analysis.add_argument('--n-clusters', type=int, help='Number of clusters (auto-determined if not specified).')
 
     # Compare sub-command
     parser_compare = subparsers.add_parser('compare', help='Compare datasets in directories.')
@@ -439,7 +443,7 @@ def main():
                 # Combine -r with directories
                 args.directories = [os.path.join(args.root, d) for d in args.directories]
         run_attribute_analysis_wrapper(args.directories, args.format)
-        run_drift_analysis(args.directories, args.format, args.n_clusters, args.method)
+        run_drift_analysis(args.directories, args.format)
 
     elif args.command == 'compare':
         if args.root:

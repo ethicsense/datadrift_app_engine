@@ -38,13 +38,24 @@ class ImageAnalysisReport:
         
     def load_data(self):
         """캐시된 분석 데이터를 로드합니다."""
-        # 캐시 매니저에서 데이터 로드
-        cached_data = get_cached_analysis_data(self.directory, "image_analysis")
-        if cached_data is not None:
-            return cached_data
+        # 이미지 분석 데이터 로드
+        image_analysis_data = get_cached_analysis_data(self.directory, "image_analysis") or {}
         
-        # 캐시에 데이터가 없으면 빈 딕셔너리 반환
-        return {}
+        # 임베딩 데이터 로드
+        drift_content_data = get_cached_analysis_data(self.directory, "image_drift_content") or {}
+        
+        # 두 데이터를 병합 (임베딩 데이터가 우선)
+        merged_data = image_analysis_data.copy()
+        
+        for filename, drift_item in drift_content_data.items():
+            if filename in merged_data:
+                # 기존 속성 데이터에 임베딩 추가
+                merged_data[filename].update(drift_item)
+            else:
+                # 임베딩 데이터만 있는 경우
+                merged_data[filename] = drift_item
+        
+        return merged_data
     
     def load_clustering_data(self):
         """캐시된 클러스터링 분석 데이터를 로드합니다."""
@@ -175,8 +186,10 @@ class ImageAnalysisReport:
             plt.close()
         
         # 5. 임베딩 공간 시각화 (PCA)
-        embeddings = np.array([item['embedding'] for item in self.data.values()])
-        if len(embeddings) > 1:
+        # 임베딩이 있는 데이터만 필터링
+        items_with_embeddings = [item for item in self.data.values() if 'embedding' in item]
+        if len(items_with_embeddings) > 1:
+            embeddings = np.array([item['embedding'] for item in items_with_embeddings])
             pca = PCA(n_components=2)
             embeddings_2d = pca.fit_transform(embeddings)
             
@@ -382,7 +395,6 @@ class ImageAnalysisReport:
             if 'size_distribution' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">File Size Distribution</h4>
                 <img src="data:image/png;base64,{charts['size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -391,7 +403,6 @@ class ImageAnalysisReport:
             if 'format_distribution' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Image Format Distribution</h4>
                 <img src="data:image/png;base64,{charts['format_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -400,7 +411,6 @@ class ImageAnalysisReport:
             if 'noise_vs_sharpness' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Noise Level vs Sharpness</h4>
                 <img src="data:image/png;base64,{charts['noise_vs_sharpness']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -409,7 +419,6 @@ class ImageAnalysisReport:
             if 'resolution_distribution' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Top 10 Resolution Distribution</h4>
                 <img src="data:image/png;base64,{charts['resolution_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -418,7 +427,6 @@ class ImageAnalysisReport:
             if 'embeddings_pca' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Image Embeddings (PCA 2D)</h4>
                 <img src="data:image/png;base64,{charts['embeddings_pca']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -427,7 +435,6 @@ class ImageAnalysisReport:
             if 'clustering_results' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Clustering Results</h4>
                 <img src="data:image/png;base64,{charts['clustering_results']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -436,7 +443,6 @@ class ImageAnalysisReport:
             if 'cluster_size_distribution' in charts:
                 html_parts.append(f"""
             <div style="text-align: center; margin: 20px 0;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Cluster Size Distribution</h4>
                 <img src="data:image/png;base64,{charts['cluster_size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
                 """)
@@ -578,7 +584,7 @@ class ImageAnalysisReport:
         # 8. 클러스터링 요약 섹션 (클러스터링 데이터가 있는 경우)
         clustering_summary = self.create_clustering_summary()
         if clustering_summary:
-            html_parts.append("""
+            html_parts.append(f"""
         <div style="margin-bottom: 20px;">
             <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 Clustering Summary</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
