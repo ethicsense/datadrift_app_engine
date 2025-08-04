@@ -78,7 +78,6 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
     # 이미지 분석 섹션 (항상 표시, 데이터가 없으면 안내 메시지)
     sections.append(f"""
     <div class="section">
-        <div class="section-title">🖼️ Image Attributes Analysis Results</div>
         {image_analysis_content}
     </div>
     """)
