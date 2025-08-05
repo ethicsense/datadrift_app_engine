@@ -33,47 +33,116 @@ from cache_utils.cache_manager import get_cached_analysis_data
 class ImageAnalysisReport:
     def __init__(self, directory):
         self.directory = directory
-        self.data = self.load_data()
+        # 데이터를 컨텐츠별로 분리하여 저장
+        self.attr_data = self.load_attribute_data()
+        self.embed_data = self.load_embedding_data()
+        self.xai_data = self.load_xai_data()
         self.clustering_data = self.load_clustering_data()
         
-    def load_data(self):
-        """캐시된 분석 데이터를 로드합니다."""
-        # 이미지 분석 데이터 로드
-        image_analysis_data = get_cached_analysis_data(self.directory, "image_analysis") or {}
+        # 기존 호환성을 위한 병합 데이터 (필요시에만 사용)
+        self.data = self._merge_data_for_compatibility()
         
-        # 임베딩 데이터 로드
-        drift_content_data = get_cached_analysis_data(self.directory, "image_drift_content") or {}
+    def load_attribute_data(self):
+        """속성 분석 데이터를 로드합니다."""
+        cached_data = get_cached_analysis_data(self.directory, "attribute_analysis")
+        if cached_data is not None:
+            print(f"📊 Loaded attribute data: {len(cached_data)} files")
+            return cached_data
+            
+        print("ℹ️  No attribute analysis data found in cache")
+        return {}
+    
+    def load_embedding_data(self):
+        """임베딩 분석 데이터를 로드합니다."""
+        cached_data = get_cached_analysis_data(self.directory, "embedding_analysis")
+        if cached_data is not None:
+            print(f"📊 Loaded embedding data: {len(cached_data)} files")
+            return cached_data
+            
+        print("ℹ️  No embedding analysis data found in cache")
+        return {}
+    
+    def load_clustering_data(self):
+        """클러스터링 데이터를 로드합니다."""
+        # 1. 전용 클러스터링 분석 데이터 확인
+        cached_data = get_cached_analysis_data(self.directory, "clustering_analysis")
+        if cached_data is not None:
+            print(f"📊 Loaded clustering data: {type(cached_data)}")
+            return cached_data
         
-        # 두 데이터를 병합 (임베딩 데이터가 우선)
-        merged_data = image_analysis_data.copy()
+        # 2. 임베딩 분석 결과에서 클러스터링 정보 추출
+        cached_data = get_cached_analysis_data(self.directory, "embedding_analysis")
+        if cached_data is not None:
+            # 클러스터링 정보 추출
+            clustering_data = {}
+            for filename, data in cached_data.items():
+                if isinstance(data, dict) and 'cluster' in data:
+                    clustering_data[filename] = {
+                        'cluster': data['cluster'],
+                        'embedding': data.get('embedding', None)
+                    }
+            
+            if clustering_data:
+                print(f"📊 Loaded clustering data from embedding analysis: {len(clustering_data)} files")
+                return clustering_data
+            
+        print("ℹ️  No clustering data found in cache")
+        return {}
+    
+    def load_xai_data(self):
+        """XAI 분석 데이터를 로드합니다."""
+        cached_data = get_cached_analysis_data(self.directory, "xai_analysis")
+        if cached_data is not None:
+            print(f"📊 Loaded XAI data: {len(cached_data)} files")
+            return cached_data
+        print("ℹ️  No XAI analysis data found in cache")
+        return {}
+    
+    def _merge_data_for_compatibility(self):
+        """기존 호환성을 위해 데이터를 병합합니다."""
+        merged_data = self.attr_data.copy()
         
-        for filename, drift_item in drift_content_data.items():
+        # 임베딩 데이터 병합
+        for filename, embed_item in self.embed_data.items():
             if filename in merged_data:
-                # 기존 속성 데이터에 임베딩 추가
-                merged_data[filename].update(drift_item)
+                merged_data[filename].update(embed_item)
             else:
-                # 임베딩 데이터만 있는 경우
-                merged_data[filename] = drift_item
+                merged_data[filename] = embed_item
         
         return merged_data
     
-    def load_clustering_data(self):
-        """캐시된 클러스터링 분석 데이터를 로드합니다."""
-        # 캐시 매니저에서 클러스터링 데이터 로드
-        cached_data = get_cached_analysis_data(self.directory, "clustering_analysis")
-        if cached_data is not None:
-            return cached_data
+    def get_combined_data(self):
+        """모든 분석 데이터를 병합하여 반환합니다."""
+        combined_data = {}
         
-        # 캐시에 데이터가 없으면 빈 딕셔너리 반환
-        return {}
+        # 속성 데이터 추가
+        for filename, attr_item in self.attr_data.items():
+            combined_data[filename] = attr_item.copy()
+        
+        # 임베딩 데이터 추가
+        for filename, embed_item in self.embed_data.items():
+            if filename in combined_data:
+                combined_data[filename].update(embed_item)
+            else:
+                combined_data[filename] = embed_item
+        
+        # XAI 데이터 추가
+        for filename, xai_item in self.xai_data.items():
+            if filename in combined_data:
+                combined_data[filename]['xai_analysis'] = xai_item
+            else:
+                combined_data[filename] = {'xai_analysis': xai_item}
+        
+        return combined_data
     
     def create_summary_stats(self):
         """기본 통계 정보를 생성합니다."""
-        if not self.data:
+        # 속성 데이터가 있는지 확인
+        if not self.attr_data:
             return {}
         
-        total_images = len(self.data)
-        total_size = sum(item['size'] for item in self.data.values())
+        total_images = len(self.attr_data)
+        total_size = sum(item['size'] for item in self.attr_data.values())
         
         # 형식별 통계
         formats = {}
@@ -82,7 +151,7 @@ class ImageAnalysisReport:
         noise_levels = []
         sharpness_values = []
         
-        for item in self.data.values():
+        for item in self.attr_data.values():
             # 형식별 카운트
             fmt = item['format']
             formats[fmt] = formats.get(fmt, 0) + 1
@@ -124,7 +193,7 @@ class ImageAnalysisReport:
     
     def create_visualizations(self):
         """시각화 차트들을 생성합니다."""
-        if not self.data:
+        if not self.attr_data:
             return {}
         
         charts = {}
@@ -186,10 +255,9 @@ class ImageAnalysisReport:
             plt.close()
         
         # 5. 임베딩 공간 시각화 (PCA)
-        # 임베딩이 있는 데이터만 필터링
-        items_with_embeddings = [item for item in self.data.values() if 'embedding' in item]
-        if len(items_with_embeddings) > 1:
-            embeddings = np.array([item['embedding'] for item in items_with_embeddings])
+        # 임베딩 데이터가 있는 경우
+        if self.embed_data and len(self.embed_data) > 1:
+            embeddings = np.array([item['embedding'] for item in self.embed_data.values()])
             pca = PCA(n_components=2)
             embeddings_2d = pca.fit_transform(embeddings)
             
@@ -289,6 +357,251 @@ class ImageAnalysisReport:
             'cluster_summary': cluster_summary
         }
     
+    def create_xai_visualizations(self):
+        """XAI 분석 결과를 시각화합니다. (클러스터별 대표 이미지만)"""
+        if not self.xai_data:
+            print("ℹ️  No XAI data found. XAI visualizations skipped.")
+            return {}
+        
+        try:
+            from data_utils.xai_visualizer import XAIVisualizer
+            
+            visualizer = XAIVisualizer()
+            visualizations = {}
+            
+            # 클러스터별 대표 이미지 선택
+            representative_images = self._select_representative_images()
+            
+            if not representative_images:
+                print("ℹ️  No representative images found. Skipping XAI visualizations.")
+                return {}
+            
+            print(f"🔍 Processing {len(representative_images)} representative XAI analysis results...")
+            
+            # 대표 이미지별 XAI 분석 결과 시각화
+            for filename in representative_images:
+                if filename in self.xai_data:
+                    xai_result = self.xai_data[filename]
+                    if isinstance(xai_result, dict):
+                        print(f"  🔍 Processing XAI data for representative image: {filename}")
+                        print(f"    - Available keys: {list(xai_result.keys())}")
+                        
+                        # 시각화 생성 (실제 저장된 데이터 구조 직접 사용)
+                        try:
+                            img_visualizations = visualizer.create_comprehensive_visualization(xai_result)
+                            
+                            # 파일명을 키로 사용하여 저장
+                            base_name = os.path.splitext(filename)[0]
+                            for viz_type, viz_data in img_visualizations.items():
+                                key = f"{base_name}_{viz_type}"
+                                visualizations[key] = viz_data
+                            
+                            print(f"  ✅ Processed XAI visualization for {filename} ({len(img_visualizations)} visualizations)")
+                        except Exception as viz_error:
+                            print(f"  ❌ Failed to create visualizations for {filename}: {viz_error}")
+                    else:
+                        print(f"  ⚠️  Skipping {filename}: not a dictionary")
+                else:
+                    print(f"  ⚠️  Representative image {filename} not found in XAI data")
+            
+            print(f"🎨 Generated {len(visualizations)} XAI visualizations from {len(representative_images)} representative images")
+            return visualizations
+            
+        except ImportError:
+            print("Warning: xai_visualizer module not found. XAI visualization skipped.")
+            return {}
+        except Exception as e:
+            print(f"Error creating XAI visualizations: {e}")
+            return {}
+    
+    def _select_representative_images(self):
+        """클러스터별 대표 이미지를 선택합니다."""
+        representative_images = []
+        
+        print(f"  🔍 Checking clustering data...")
+        print(f"    - clustering_data exists: {hasattr(self, 'clustering_data')}")
+        print(f"    - clustering_data content: {len(self.clustering_data) if hasattr(self, 'clustering_data') and self.clustering_data else 0} items")
+        
+        # 클러스터링 데이터가 있는 경우
+        if hasattr(self, 'clustering_data') and self.clustering_data:
+            try:
+                # 클러스터별로 대표 이미지 선택
+                cluster_groups = {}
+                
+                # 클러스터링 데이터 구조 확인
+                print(f"    - Clustering data type: {type(self.clustering_data)}")
+                print(f"    - Clustering data keys: {list(self.clustering_data.keys()) if isinstance(self.clustering_data, dict) else 'Not a dict'}")
+                
+                # 클러스터 정보 추출 (세 가지 구조 지원)
+                if isinstance(self.clustering_data, dict):
+                    # 구조 1: 클러스터링 분석 결과 구조
+                    if 'cluster_labels' in self.clustering_data and 'file_names' in self.clustering_data:
+                        print(f"    - Found clustering analysis structure with {len(self.clustering_data['file_names'])} files")
+                        cluster_labels = self.clustering_data['cluster_labels']
+                        file_names = self.clustering_data['file_names']
+                        
+                        for i, (label, filename) in enumerate(zip(cluster_labels, file_names)):
+                            cluster_id = label
+                            if cluster_id not in cluster_groups:
+                                cluster_groups[cluster_id] = []
+                            cluster_groups[cluster_id].append(filename)
+                    
+                    # 구조 2: {filename: {cluster: id, embedding: [...]}}
+                    elif any(isinstance(v, dict) and 'cluster' in v for v in self.clustering_data.values()):
+                        for filename, cluster_info in self.clustering_data.items():
+                            if isinstance(cluster_info, dict) and 'cluster' in cluster_info:
+                                cluster_id = cluster_info['cluster']
+                                if cluster_id not in cluster_groups:
+                                    cluster_groups[cluster_id] = []
+                                cluster_groups[cluster_id].append(filename)
+                    
+                    # 구조 3: {filename: cluster_id}
+                    elif any(isinstance(v, int) for v in self.clustering_data.values()):
+                        for filename, cluster_id in self.clustering_data.items():
+                            if isinstance(cluster_id, int):
+                                if cluster_id not in cluster_groups:
+                                    cluster_groups[cluster_id] = []
+                                cluster_groups[cluster_id].append(filename)
+                
+                print(f"    - Found {len(cluster_groups)} clusters: {list(cluster_groups.keys())}")
+                
+                # 각 클러스터에서 무작위 대표 이미지 선택
+                import random
+                for cluster_id, filenames in cluster_groups.items():
+                    # XAI 데이터가 있는 파일들만 필터링
+                    xai_available_files = [f for f in filenames if f in self.xai_data]
+                    
+                    if xai_available_files:
+                        # 무작위로 대표 이미지 선택
+                        selected_file = random.choice(xai_available_files)
+                        representative_images.append(selected_file)
+                        print(f"  📊 Selected random representative for cluster {cluster_id}: {selected_file}")
+                    else:
+                        print(f"  ⚠️  No XAI data available for cluster {cluster_id}")
+                
+                print(f"  📊 Selected {len(representative_images)} representative images from {len(cluster_groups)} clusters")
+                
+            except Exception as e:
+                print(f"  ⚠️  Error selecting representative images: {e}")
+                # 오류 발생 시 처음 3개 이미지만 선택
+                if self.xai_data:
+                    representative_images = list(self.xai_data.keys())[:3]
+                    print(f"  📊 Fallback: Selected first 3 images as representatives")
+        else:
+            # 클러스터링 데이터가 없는 경우 처음 3개 이미지만 선택
+            if self.xai_data:
+                representative_images = list(self.xai_data.keys())[:3]
+                print(f"  📊 No clustering data found. Selected first 3 images as representatives")
+            else:
+                print(f"  ⚠️  No XAI data available for representative selection")
+        
+        return representative_images
+    
+    def create_xai_summary_stats(self):
+        """XAI 분석 결과 요약 통계를 생성합니다."""
+        if not self.xai_data:
+            return {}
+        
+        total_xai_files = len(self.xai_data)
+        
+        # 분석 품질 지표
+        quality_metrics = {
+            'high_quality_analyses': 0,  # IoU > 0.5
+            'medium_quality_analyses': 0,  # 0.3 < IoU <= 0.5
+            'low_quality_analyses': 0,  # IoU <= 0.3
+            'no_detection_analyses': 0,  # IoU = 0
+            'high_entropy_analyses': 0,  # Shannon entropy > 2.0
+            'low_entropy_analyses': 0,  # Shannon entropy <= 1.0
+            'complex_components': 0,  # > 5 connected components
+            'simple_components': 0,  # <= 2 connected components
+        }
+        
+        # 검출된 객체 정보
+        detected_classes = {}
+        model_info = {}
+        
+        # 대표 이미지 정보 (클러스터링 기반)
+        representative_info = {
+            'total_clusters': 0,
+            'representative_images': 0,
+            'cluster_coverage': 0.0
+        }
+        
+        for filename, xai_result in self.xai_data.items():
+            if isinstance(xai_result, dict):
+                # 모델 정보 수집
+                if 'model_name' in xai_result:
+                    model_name = xai_result['model_name']
+                    model_info[model_name] = model_info.get(model_name, 0) + 1
+                
+                # IoU 품질 분석
+                if 'overlap_analysis' in xai_result:
+                    overlap = xai_result['overlap_analysis']
+                    iou = overlap.get('iou', 0)
+                    
+                    if iou > 0.5:
+                        quality_metrics['high_quality_analyses'] += 1
+                    elif iou > 0.3:
+                        quality_metrics['medium_quality_analyses'] += 1
+                    elif iou > 0:
+                        quality_metrics['low_quality_analyses'] += 1
+                    else:
+                        quality_metrics['no_detection_analyses'] += 1
+                    
+                    # 검출된 클래스 정보
+                    class_name = overlap.get('largest_class_name', 'Unknown')
+                    detected_classes[class_name] = detected_classes.get(class_name, 0) + 1
+                
+                # 엔트로피 품질 분석
+                if 'entropy_results' in xai_result:
+                    entropy = xai_result['entropy_results']
+                    shannon_entropy = entropy.get('shannon', 0)
+                    
+                    if shannon_entropy > 2.0:
+                        quality_metrics['high_entropy_analyses'] += 1
+                    elif shannon_entropy <= 1.0:
+                        quality_metrics['low_entropy_analyses'] += 1
+                
+                # Connected Components 복잡도 분석
+                if 'components_analysis' in xai_result:
+                    components = xai_result['components_analysis']
+                    num_components = components.get('num_components', 0)
+                    
+                    if num_components > 5:
+                        quality_metrics['complex_components'] += 1
+                    elif num_components <= 2:
+                        quality_metrics['simple_components'] += 1
+        
+        # 클러스터링 정보 (대표 이미지 선택 기준)
+        if hasattr(self, 'clustering_data') and self.clustering_data:
+            if 'cluster_labels' in self.clustering_data:
+                unique_clusters = len(set(self.clustering_data['cluster_labels']))
+                representative_info['total_clusters'] = unique_clusters
+                representative_info['representative_images'] = len(self._select_representative_images())
+                representative_info['cluster_coverage'] = (representative_info['representative_images'] / unique_clusters * 100) if unique_clusters > 0 else 0
+        
+        # 품질 요약
+        quality_summary = {
+            'excellent': quality_metrics['high_quality_analyses'],
+            'good': quality_metrics['medium_quality_analyses'],
+            'poor': quality_metrics['low_quality_analyses'] + quality_metrics['no_detection_analyses']
+        }
+        
+        return {
+            'total_files': total_xai_files,
+            'quality_summary': quality_summary,
+            'quality_metrics': quality_metrics,
+            'detected_classes': detected_classes,
+            'model_info': model_info,
+            'representative_info': representative_info,
+            'analysis_coverage': {
+                'with_detections': quality_metrics['high_quality_analyses'] + quality_metrics['medium_quality_analyses'] + quality_metrics['low_quality_analyses'],
+                'without_detections': quality_metrics['no_detection_analyses'],
+                'high_entropy': quality_metrics['high_entropy_analyses'],
+                'complex_patterns': quality_metrics['complex_components']
+            }
+        }
+    
     def fig_to_base64(self):
         """matplotlib figure를 base64 인코딩된 이미지로 변환합니다."""
         buf = BytesIO()
@@ -300,11 +613,11 @@ class ImageAnalysisReport:
     
     def create_sample_images_table(self, max_samples=10):
         """샘플 이미지들의 정보를 테이블로 생성합니다."""
-        if not self.data:
+        if not self.attr_data:
             return []
         
         # 파일 크기 순으로 정렬하여 샘플 선택
-        sorted_items = sorted(self.data.items(), key=lambda x: x[1]['size'], reverse=True)
+        sorted_items = sorted(self.attr_data.items(), key=lambda x: x[1]['size'], reverse=True)
         samples = sorted_items[:max_samples]
         
         sample_data = []
@@ -323,13 +636,23 @@ class ImageAnalysisReport:
     
     def generate_html_body(self):
         """report_layout.py에 맞는 HTML 본문만 생성합니다."""
-        if not self.data:
-            return '<p>분석 데이터가 없습니다.</p>'
+        if not self.attr_data and not self.embed_data and not self.xai_data:
+            print("❌ No analysis data found. Please run analysis first.")
+            return None
         
         # 데이터 준비
         summary = self.create_summary_stats()
         charts = self.create_visualizations()
         samples = self.create_sample_images_table()
+        xai_charts = self.create_xai_visualizations()
+        xai_summary = self.create_xai_summary_stats()
+        
+        print(f"📊 Report data summary:")
+        print(f"  - Summary stats: {'✅' if summary else '❌'}")
+        print(f"  - Charts: {len(charts)} visualizations")
+        print(f"  - Samples: {len(samples)} sample images")
+        print(f"  - XAI charts: {len(xai_charts)} XAI visualizations")
+        print(f"  - XAI summary: {'✅' if xai_summary else '❌'}")
         
         # HTML 파트들을 동적으로 생성
         html_parts = []
@@ -537,13 +860,13 @@ class ImageAnalysisReport:
             """)
         
         # 6. 임베딩 정보 섹션 (임베딩 데이터가 있는 경우)
-        if self.data and any('embedding' in item for item in self.data.values()):
-            embeddings = [item['embedding'] for item in self.data.values() if 'embedding' in item]
+        if self.embed_data:
+            embeddings = [item['embedding'] for item in self.embed_data.values()]
             if embeddings:
                 embedding_dim = len(embeddings[0])
                 html_parts.append(f"""
         <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 Embedding Information</h3>
+            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🪐 Embedding Informations</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
                     <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Embedding Dimension</h4>
@@ -641,6 +964,101 @@ class ImageAnalysisReport:
             </div>
                 """)
         
+        # 9. XAI 분석 결과 섹션 (XAI 데이터가 있는 경우)
+        if xai_summary or xai_charts:
+            print(f"🎨 Adding XAI section with {len(xai_charts)} visualizations and summary stats")
+        else:
+            print("ℹ️  No XAI data available, skipping XAI section")
+            
+        if xai_summary or xai_charts:
+            html_parts.append("""
+        <div style="margin-bottom: 30px;">
+            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 XAI (Explainable AI) Analysis Results</h3>
+        """)
+            
+            # XAI 요약 통계 추가
+            if xai_summary:
+                html_parts.append(f"""
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid #dee2e6;">📊 XAI Analysis Summary</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Files Analyzed</h5>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{xai_summary.get('total_files', 0):,}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">High Quality Analyses</h5>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #28a745;">{xai_summary.get('quality_summary', {}).get('excellent', 0):,}</div>
+                        <small style="color: #6c757d;">IoU > 0.5</small>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Complex Patterns</h5>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #ffc107;">{xai_summary.get('analysis_coverage', {}).get('complex_patterns', 0):,}</div>
+                        <small style="color: #6c757d;">> 5 components</small>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Representative Images</h5>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #17a2b8;">{xai_summary.get('representative_info', {}).get('representative_images', 0):,}</div>
+                        <small style="color: #6c757d;">from {xai_summary.get('representative_info', {}).get('total_clusters', 0)} clusters</small>
+                    </div>
+                </div>
+            </div>
+                """)
+                
+
+            
+            # XAI 시각화들을 파일별로 그룹화
+            file_groups = {}
+            for key, viz_data in xai_charts.items():
+                # 키 형식: "filename_viztype"
+                parts = key.split('_', 1)
+                if len(parts) == 2:
+                    filename, viz_type = parts
+                    if filename not in file_groups:
+                        file_groups[filename] = {}
+                    file_groups[filename][viz_type] = viz_data
+            
+            # 각 파일별로 XAI 결과 표시
+            for filename, viz_types in file_groups.items():
+                html_parts.append(f"""
+            <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e9ecef;">
+                <h4 style="color: #495057; margin-bottom: 15px; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">
+                    📁 {filename}
+                </h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                """)
+                
+                # 시각화 타입별 제목 매핑
+                viz_titles = {
+                    'basic_cam': '📊 Basic CAM Visualization',
+                    'cam_statistics': '📈 CAM Statistics',
+                    'connected_components': '🔗 Connected Components Analysis',
+                    'entropy_analysis': '📊 Entropy Analysis',
+                    'centroid_analysis': '🎯 Centroid Analysis',
+                    'overlap_analysis': '🔍 Overlap Analysis'
+                }
+                
+                for viz_type, viz_data in viz_types.items():
+                    title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
+                    html_parts.append(f"""
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                        <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
+                        <div style="text-align: center;">
+                            <img src="data:image/png;base64,{viz_data}" 
+                                 style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        </div>
+                    </div>
+                    """)
+                
+                html_parts.append("""
+                </div>
+            </div>
+                """)
+            
+            html_parts.append("""
+        </div>
+            """)
+        
         return ''.join(html_parts)
 
 def create_report_body(directory):
@@ -649,7 +1067,9 @@ def create_report_body(directory):
         report = ImageAnalysisReport(directory)
         return report.generate_html_body()
     except Exception as e:
-        return f'<div>오류: {e}</div>'
+        # 에러가 발생하면 None을 반환하여 보고서 생성을 중단
+        print(f"❌ Error in create_report_body: {e}")
+        return None
 
 if __name__ == "__main__":
     import sys

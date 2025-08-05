@@ -8,7 +8,6 @@ from .cache_manager import (
     CacheManager,
     get_cache_manager,
     get_cached_html_content,
-    get_cached_image_analysis_html,
     get_cached_analysis_data,
     save_analysis_data,
     global_cache_manager
@@ -18,7 +17,6 @@ __all__ = [
     'CacheManager',
     'get_cache_manager',
     'get_cached_html_content',
-    'get_cached_image_analysis_html',
     'get_cached_analysis_data',
     'save_analysis_data',
     'global_cache_manager'

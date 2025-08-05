@@ -2,8 +2,8 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import os
 
-# 캐시 매니저 import
-from cache_utils.cache_manager import get_cache_manager, get_cached_html_content, get_cached_image_analysis_html, get_cached_analysis_data, save_analysis_data
+# 캐시 매니저 import (분석 데이터용)
+from cache_utils.cache_manager import get_cache_manager, get_cached_html_content, get_cached_analysis_data, save_analysis_data
 
 # HTML에서 <body> 태그만 추출하고 h1 태그 제거
 def get_html_body(html):
@@ -54,10 +54,11 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
             dataset_directory=dataset_directory
         )
     
-    # 이미지 분석 리포트 생성
+    # 이미지 분석 리포트 생성 (실시간 생성)
     if dataset_directory:
         try:
-            image_analysis_content = get_cached_image_analysis_html(dataset_directory)
+            from report_generator.create_report import create_report_body
+            image_analysis_content = create_report_body(dataset_directory)
             if not image_analysis_content or image_analysis_content.strip() == '':
                 image_analysis_content = '<p>이미지 분석 데이터가 없습니다. 먼저 이미지 분석을 실행해주세요.</p>'
         except Exception as e:

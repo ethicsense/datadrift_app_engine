@@ -8,13 +8,12 @@ from pathlib import Path
 '''
 dataset_folder/
 ├── cache/
-│   ├── image_analysis_html_body.cache          # 이미지 분석 HTML 본문
-│   ├── image_analysis_html_body_meta.json      # 본문 메타데이터
-│   ├── complete_html_report.cache              # 완전한 HTML 리포트
-│   ├── complete_html_report_meta.json          # 완전한 리포트 메타데이터
-│   ├── {dataset_name}_complete_report.html     # 완전한 HTML 파일
-│   ├── analysis_image_analysis_data.cache      # 이미지 분석 데이터
-│   └── analysis_image_analysis_data_meta.json  # 분석 메타데이터
+│   ├── analysis_image_analysis_test_data2.cache
+│   ├── analysis_image_analysis_test_data2_meta.json
+│   ├── analysis_image_drift_content_test_data2.cache
+│   ├── analysis_image_drift_content_test_data2_meta.json
+│   ├── analysis_xai_analysis_test_data2.cache
+│   └── analysis_xai_analysis_test_data2_meta.json
 '''
 
 class CacheManager:
@@ -31,14 +30,32 @@ class CacheManager:
         self.cache_dir.mkdir(exist_ok=True, parents=True)
         
         # 캐시 설정
-        self.cache_expiry_days = int(os.getenv('DATADRIFT_CACHE_EXPIRY_DAYS', '7'))
-        self.max_cache_size_mb = int(os.getenv('DATADRIFT_CACHE_MAX_SIZE_MB', '100'))
+        self.cache_expiry_days = int(os.getenv('DATADRIFT_CACHE_EXPIRY_DAYS', '30'))
+        self.max_cache_size_mb = int(os.getenv('DATADRIFT_CACHE_MAX_SIZE_MB', '2000'))
     
     def _get_cache_key(self, identifier, content_type="html"):
         """캐시 키 생성"""
-        # 식별자를 해시로 변환하여 안전한 파일명 생성
-        hash_obj = hashlib.md5(identifier.encode())
-        return f"{content_type}_{hash_obj.hexdigest()}"
+        # 식별자를 안전한 파일명으로 변환
+        safe_identifier = self._make_safe_filename(identifier)
+        
+        # 파일명 길이 제한 (너무 길어지지 않도록)
+        if len(safe_identifier) > 50:
+            # 해시를 사용하여 짧게 만들기
+            hash_obj = hashlib.md5(identifier.encode())
+            safe_identifier = f"{safe_identifier[:30]}_{hash_obj.hexdigest()[:8]}"
+        
+        return f"{content_type}_{safe_identifier}"
+    
+    def _make_safe_filename(self, filename):
+        """파일명을 안전하게 만듭니다."""
+        # 특수문자 제거 및 공백을 언더스코어로 변경
+        import re
+        safe_name = re.sub(r'[^\w\-_.]', '_', filename)
+        # 연속된 언더스코어를 하나로 변경
+        safe_name = re.sub(r'_+', '_', safe_name)
+        # 앞뒤 언더스코어 제거
+        safe_name = safe_name.strip('_')
+        return safe_name
     
     def _get_cache_path(self, cache_key):
         """캐시 파일 경로 반환"""
@@ -103,9 +120,8 @@ class CacheManager:
         total_size_mb = total_size / (1024 * 1024)
         
         if total_size_mb > self.max_cache_size_mb:
-            # 가장 오래된 파일부터 삭제
-            cache_files.sort(key=lambda x: x[0].stat().st_mtime)
-            
+            print(f"⚠️  캐시 크기 초과: {total_size_mb:.2f}MB > {self.max_cache_size_mb}MB")
+            print(f"📁 캐시 파일들:")
             for cache_file, size in cache_files:
                 try:
                     metadata_path = cache_file.with_name(f"{cache_file.stem}_meta.json")
@@ -124,9 +140,6 @@ class CacheManager:
         cache_key = self._get_cache_key(identifier, content_type)
         cache_path = self._get_cache_path(cache_key)
         metadata_path = self._get_metadata_path(cache_key)
-        
-        # 만료된 캐시 정리
-        self._cleanup_expired_cache()
         
         # 캐시가 존재하고 유효한지 확인
         if cache_path.exists() and self._is_cache_valid(metadata_path):
@@ -147,20 +160,27 @@ class CacheManager:
         metadata_path = self._get_metadata_path(cache_key)
         
         try:
+            print(f"💾 캐시 저장 중: {cache_key}")
+            
             # 컨텐츠를 pickle로 저장
             with open(cache_path, 'wb') as f:
                 pickle.dump(content, f)
+            
+            # 저장된 파일 크기 확인
+            file_size = cache_path.stat().st_size
+            file_size_mb = file_size / (1024 * 1024)
+            print(f"📁 저장된 파일 크기: {file_size_mb:.2f}MB")
             
             # 메타데이터 저장
             content_size = len(str(content).encode('utf-8'))
             self._save_metadata(metadata_path, content_size, content_type)
             
-            # 캐시 크기 확인
+            # 캐시 크기 확인 및 정리 (저장 후에만)
             self._check_cache_size()
             
             return True
         except Exception as e:
-            print(f"캐시 저장 오류: {e}")
+            print(f"❌ 캐시 저장 오류: {e}")
             return False
     
     def invalidate_cache(self, identifier, content_type="html"):
@@ -195,12 +215,35 @@ class CacheManager:
         total_size = sum(f.stat().st_size for f in cache_files)
         total_size_mb = total_size / (1024 * 1024)
         
+        # 캐시 파일 상세 정보
+        cache_details = []
+        for cache_file in cache_files:
+            metadata_path = cache_file.with_name(f"{cache_file.stem}_meta.json")
+            file_info = {
+                'filename': cache_file.name,
+                'size_mb': round(cache_file.stat().st_size / (1024 * 1024), 3),
+                'created_time': None,
+                'content_type': None
+            }
+            
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                    file_info['created_time'] = metadata.get('created_time')
+                    file_info['content_type'] = metadata.get('content_type')
+                except Exception:
+                    pass
+            
+            cache_details.append(file_info)
+        
         return {
             'total_files': len(cache_files),
             'total_size_mb': round(total_size_mb, 2),
             'max_size_mb': self.max_cache_size_mb,
             'expiry_days': self.cache_expiry_days,
-            'cache_dir': str(self.cache_dir.absolute())
+            'cache_dir': str(self.cache_dir.absolute()),
+            'cache_details': cache_details
         }
 
 # 전역 캐시 매니저 인스턴스 (기본 캐시용)
@@ -228,22 +271,20 @@ def get_cached_html_content(identifier, generator_func, *args, dataset_directory
         cache_manager.save_cached_content(identifier, content, "html")
         return content
     except Exception as e:
-        return f"<div style='color: #e74c3c; padding: 15px; background: #fdf2f2; border-radius: 5px; border: 1px solid #f5c6cb;'>컨텐츠 생성 오류: {e}</div>"
+        # 에러가 발생하면 캐시에 저장하지 않고 예외를 다시 발생시킴
+        raise e
 
-def get_cached_image_analysis_html(directory):
-    """이미지 분석 HTML을 캐시에서 가져오거나 생성"""
-    return get_cached_html_content(
-        "image_analysis_html_body",
-        lambda: create_report_body(directory),
-        dataset_directory=directory
-    )
 
 def get_cached_analysis_data(directory, data_type="image_analysis"):
     """분석 데이터를 캐시에서 가져오거나 생성"""
     cache_manager = get_cache_manager(directory)
     
+    # 디렉토리명을 포함한 더 구체적인 식별자 생성
+    dir_name = os.path.basename(directory)
+    identifier = f"{data_type}_{dir_name}"
+    
     # 캐시에서 확인
-    cached_data = cache_manager.get_cached_content(f"{data_type}_data", "analysis")
+    cached_data = cache_manager.get_cached_content(identifier, "analysis")
     if cached_data is not None:
         return cached_data
     
@@ -252,13 +293,11 @@ def get_cached_analysis_data(directory, data_type="image_analysis"):
 def save_analysis_data(directory, data, data_type="image_analysis"):
     """분석 데이터를 캐시에 저장"""
     cache_manager = get_cache_manager(directory)
-    return cache_manager.save_cached_content(f"{data_type}_data", data, "analysis")
+    
+    # 디렉토리명을 포함한 더 구체적인 식별자 생성
+    dir_name = os.path.basename(directory)
+    identifier = f"{data_type}_{dir_name}"
+    
+    return cache_manager.save_cached_content(identifier, data, "analysis")
 
-# create_report_body 함수 import (동적 import로 변경)
-def create_report_body(directory):
-    """create_report_body 함수를 동적으로 import하여 사용"""
-    try:
-        from report_gen.create_report import create_report_body as _create_report_body
-        return _create_report_body(directory)
-    except ImportError:
-        return f"<div>create_report_body 모듈을 찾을 수 없습니다: {directory}</div>" 
+ 
