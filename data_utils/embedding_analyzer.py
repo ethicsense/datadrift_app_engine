@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import silhouette_score, calinski_harabasz_score
 from yellowbrick.cluster import KElbowVisualizer
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 import os
@@ -11,12 +12,12 @@ from PIL import Image
 import hashlib
 
 
-class EmbeddingManager:
+class EmbeddingAnalyzer:
     """임베딩 추출 및 분석을 관리하는 클래스"""
     
     def __init__(self, device=None):
         """
-        EmbeddingManager 초기화
+        EmbeddingAnalyzer 초기화
         
         Args:
             device: 사용할 디바이스 (None이면 자동 선택)
@@ -84,7 +85,7 @@ class EmbeddingManager:
             print(f"Error processing {file_path}: {e}")
             return None
     
-    def perform_clustering(self, embeddings_data, file_names, file_paths, n_clusters=None, method='kmeans'):
+    def perform_clustering(self, embeddings_data, file_names, file_paths, n_clusters=None, method='kmeans', cluster_selection_method='silhouette'):
         """
         임베딩을 기반으로 클러스터링 분석을 수행합니다.
         
@@ -94,11 +95,13 @@ class EmbeddingManager:
             file_paths: 파일 경로 리스트
             n_clusters: 클러스터 수 (None이면 자동 결정)
             method: 클러스터링 방법 ('kmeans', 'dbscan', 'hierarchical')
+            cluster_selection_method: 클러스터 수 선택 방법 ('silhouette', 'elbow', 'manual')
         
         Returns:
             dict: 클러스터링 결과
         """
         print(f"Starting clustering analysis with method: {method}")
+        print(f"Cluster selection method: {cluster_selection_method}")
         
         if len(embeddings_data) < 2:
             print("Not enough data for clustering")
@@ -112,7 +115,7 @@ class EmbeddingManager:
         embeddings_2d = pca.fit_transform(embeddings_array)
         
         # 클러스터링 수행
-        clustering_result = self._apply_clustering(embeddings_2d, method, n_clusters)
+        clustering_result = self._apply_clustering(embeddings_2d, method, n_clusters, cluster_selection_method)
         
         # Centroid 계산 및 유사도 점수 계산
         centroids, centroid_similarities = self._calculate_centroids_and_similarities(
@@ -158,16 +161,24 @@ class EmbeddingManager:
             'centroid_similarities': centroid_similarities
         }
     
-    def _apply_clustering(self, embeddings_2d, method, n_clusters):
+    def _apply_clustering(self, embeddings_2d, method, n_clusters, cluster_selection_method='silhouette'):
         """클러스터링 알고리즘을 적용합니다."""
         if method == 'kmeans':
             if n_clusters is None:
-                # Elbow method로 최적 클러스터 수 결정
-                print("Determining optimal number of clusters using Elbow method...")
-                model = KMeans(random_state=42)
-                visualizer = KElbowVisualizer(model, k=(1, min(10, len(embeddings_2d))))
-                visualizer.fit(embeddings_2d)
-                n_clusters = visualizer.elbow_value_
+                # 선택된 방법으로 최적 클러스터 수 결정
+                if cluster_selection_method == 'silhouette':
+                    print("Determining optimal number of clusters using Silhouette analysis...")
+                    n_clusters = self._find_optimal_clusters_silhouette(embeddings_2d)
+                elif cluster_selection_method == 'elbow':
+                    print("Determining optimal number of clusters using Elbow method...")
+                    n_clusters = self._find_optimal_clusters_elbow(embeddings_2d)
+                elif cluster_selection_method == 'manual':
+                    print("Using manual cluster selection...")
+                    n_clusters = self._find_optimal_clusters_manual(embeddings_2d)
+                else:
+                    print(f"Unknown cluster selection method: {cluster_selection_method}, using silhouette...")
+                    n_clusters = self._find_optimal_clusters_silhouette(embeddings_2d)
+                
                 print(f"Optimal number of clusters: {n_clusters}")
             
             kmeans = KMeans(n_clusters=n_clusters, random_state=42)
@@ -269,6 +280,167 @@ class EmbeddingManager:
                 centroid_similarities[f'cluster_{i}'] = []
         
         return centroids, centroid_similarities
+    
+    def _find_optimal_clusters_silhouette(self, embeddings_2d):
+        """
+        Silhouette analysis를 사용하여 최적 클러스터 수를 찾습니다.
+        
+        Args:
+            embeddings_2d: 2차원으로 축소된 임베딩 데이터
+            
+        Returns:
+            int: 최적 클러스터 수
+        """
+        # 데이터 크기에 따른 k 범위 결정
+        max_k = min(10, len(embeddings_2d) - 1)  # 최소 2개 이상의 샘플이 필요
+        if max_k < 2:
+            return 1
+        
+        k_range = range(2, max_k + 1)  # k=1은 silhouette score 계산 불가
+        silhouette_scores = []
+        
+        print(f"Testing k values: {list(k_range)}")
+        
+        for k in k_range:
+            # K-means 클러스터링 수행
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            cluster_labels = kmeans.fit_predict(embeddings_2d)
+            
+            # Silhouette score와 Calinski-Harabasz score 계산
+            try:
+                sil_score = silhouette_score(embeddings_2d, cluster_labels)
+                ch_score = calinski_harabasz_score(embeddings_2d, cluster_labels)
+                silhouette_scores.append(sil_score)
+                print(f"  k={k}: silhouette={sil_score:.4f}, calinski_harabasz={ch_score:.2f}")
+            except Exception as e:
+                print(f"  k={k}: Error calculating scores - {e}")
+                silhouette_scores.append(-1)  # 에러 시 -1로 표시
+        
+        # 최고 silhouette score를 가진 k 선택
+        if silhouette_scores and max(silhouette_scores) > 0:
+            best_k = k_range[np.argmax(silhouette_scores)]
+            best_score = max(silhouette_scores)
+            print(f"Best k: {best_k} (silhouette score: {best_score:.4f})")
+            
+            # Silhouette score 해석
+            if best_score >= 0.7:
+                quality = "Strong"
+            elif best_score >= 0.5:
+                quality = "Reasonable"
+            elif best_score >= 0.25:
+                quality = "Weak"
+            else:
+                quality = "Poor"
+            
+            print(f"Clustering quality: {quality} (score: {best_score:.4f})")
+            
+            # 추가 분석: 데이터 크기와 클러스터 수의 적절성 검증
+            if best_k > len(embeddings_2d) // 3:
+                print(f"⚠️  Warning: k={best_k} might be too high for {len(embeddings_2d)} samples")
+                print(f"   Consider using k <= {len(embeddings_2d) // 3} for better interpretability")
+            
+            return best_k
+        else:
+            # Silhouette score 계산 실패 시 fallback
+            print("⚠️  Silhouette analysis failed, using fallback...")
+            if len(embeddings_2d) < 10:
+                return 1
+            elif len(embeddings_2d) < 20:
+                return 2
+            else:
+                return min(4, len(embeddings_2d) // 5)
+    
+    def _find_optimal_clusters_elbow(self, embeddings_2d):
+        """
+        Elbow method를 사용하여 최적 클러스터 수를 찾습니다.
+        
+        Args:
+            embeddings_2d: 2차원으로 축소된 임베딩 데이터
+            
+        Returns:
+            int: 최적 클러스터 수
+        """
+        print("Using Elbow method for cluster selection...")
+        
+        # 데이터 크기에 따른 k 범위 결정
+        max_k = min(10, len(embeddings_2d))
+        if max_k < 2:
+            return 1
+        
+        try:
+            model = KMeans(random_state=42)
+            visualizer = KElbowVisualizer(model, k=(1, max_k))
+            visualizer.fit(embeddings_2d)
+            n_clusters = visualizer.elbow_value_
+            
+            if n_clusters is None:
+                print("⚠️  Elbow method could not determine optimal clusters, using fallback...")
+                # 데이터 크기에 따른 fallback 로직
+                if len(embeddings_2d) < 10:
+                    n_clusters = 1
+                elif len(embeddings_2d) < 20:
+                    n_clusters = 2
+                else:
+                    n_clusters = min(4, len(embeddings_2d) // 5)
+                print(f"Fallback: using {n_clusters} clusters")
+            else:
+                print(f"Elbow method determined optimal clusters: {n_clusters}")
+            
+            # 디버깅 정보 출력
+            if hasattr(visualizer, 'k_scores_'):
+                print(f"WCSS scores and reduction rates:")
+                scores = np.array(visualizer.k_scores_)
+                for k, score in enumerate(scores, 1):
+                    if k == 1:
+                        print(f"  k={k}: {score:.4f}")
+                    else:
+                        reduction = (scores[k-2] - score) / scores[k-2] * 100
+                        print(f"  k={k}: {score:.4f} ({reduction:.2f}% reduction)")
+            
+            return n_clusters
+            
+        except Exception as e:
+            print(f"Error in Elbow method: {e}")
+            return self._find_optimal_clusters_manual(embeddings_2d)
+    
+    def _find_optimal_clusters_manual(self, embeddings_2d):
+        """
+        데이터 크기와 특성을 기반으로 수동으로 클러스터 수를 결정합니다.
+        
+        Args:
+            embeddings_2d: 2차원으로 축소된 임베딩 데이터
+            
+        Returns:
+            int: 최적 클러스터 수
+        """
+        print("Using manual cluster selection based on data characteristics...")
+        
+        data_size = len(embeddings_2d)
+        
+        # 데이터 크기에 따른 동적 결정
+        if data_size < 5:
+            n_clusters = 1
+            reason = "Very small dataset"
+        elif data_size < 10:
+            n_clusters = 2
+            reason = "Small dataset"
+        elif data_size < 20:
+            n_clusters = 3
+            reason = "Medium-small dataset"
+        elif data_size < 50:
+            n_clusters = 4
+            reason = "Medium dataset"
+        elif data_size < 100:
+            n_clusters = 5
+            reason = "Medium-large dataset"
+        else:
+            n_clusters = min(8, data_size // 20)  # 데이터 크기의 1/20, 최대 8개
+            reason = "Large dataset"
+        
+        print(f"Manual selection: {n_clusters} clusters ({reason})")
+        print(f"Data size: {data_size}, Clusters: {n_clusters}")
+        
+        return n_clusters
     
     def _calculate_cosine_similarity(self, vec1, vec2):
         """

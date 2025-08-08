@@ -7,12 +7,10 @@ from PIL import Image
 import hashlib
 from typing import List, Tuple, Dict, Optional, Union
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 import torch
 from yolo_cam.eigen_cam import EigenCAM as YOLO_EigenCAM
-from yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
 from yolo_cam.utils.image import scale_cam_image as scale_yolocam_image
 
 from scipy import ndimage
@@ -45,10 +43,11 @@ class XAIAnalyzer:
         self.feature_maps = None
         self.gradients = None
         self.target_layers = None  # 타겟 레이어를 저장할 변수 추가
+        self.target_layer_index = None  # 타겟 레이어 인덱스를 저장할 변수 추가
         
-        print(f"Using device: {self.device}")
+        # print(f"Using device: {self.device}")
     
-    def load_model(self, model_path: str):
+    def load_model(self, model_path: str, target_layer_index: Optional[int] = None):
         """
         YOLO 모델을 로드합니다.
         
@@ -70,14 +69,15 @@ class XAIAnalyzer:
             # 클래스명 가져오기
             if hasattr(self.model, 'names'):
                 self.class_names = self.model.names
-            
-            # 타겟 레이어를 한 번만 찾아서 저장
-            self.target_layers = self.find_target_layer()
-            
+
+            # 타겟 레이어 찾기
+            self.target_layers = self.find_target_layer(target_layer_index=target_layer_index)
+
             print(f"Model loaded successfully: {self.model_name}")
             print(f"Number of classes: {len(self.class_names)}")
+            
             if self.target_layers:
-                print(f"Target layer found: {self.target_layers}")
+                print(f"Target layer found: {self.target_layer_index}")
             
         except ImportError:
             print("Error: ultralytics package not found. Please install it with: pip install ultralytics")
@@ -211,15 +211,19 @@ class XAIAnalyzer:
             'device': str(self.device),
             'num_classes': len(self.class_names),
             'class_names': self.class_names.copy(),
-            'target_layer': str(self.target_layers) if self.target_layers else None
+            'target_layer': str(self.target_layers) if self.target_layers else None,
+            'target_layer_index': self.target_layer_index
         }
         
         return info
     
-    def find_target_layer(self) -> Optional[torch.nn.Module]:
+    def find_target_layer(self, target_layer_index: Optional[int] = None) -> Optional[torch.nn.Module]:
         """
         YOLO 모델에서 CAM 분석에 적합한 타겟 레이어를 찾습니다.
         
+        Args:
+            target_layer_index: 특정 인덱스의 레이어 사용 (0부터 시작)
+            
         Returns:
             Optional[torch.nn.Module]: 타겟 레이어 또는 None
         """
@@ -228,29 +232,54 @@ class XAIAnalyzer:
             return None
         
         target_layer = None
+        model_layers = self.model.model.model
+        
+        # 사용자가 특정 인덱스를 지정한 경우
+        if target_layer_index is not None:
+            if 0 <= target_layer_index < len(model_layers):
+                target_layer = model_layers[target_layer_index]
+                self.target_layer_index = target_layer_index  # 인덱스 저장
+                print(f"사용자 지정 인덱스 {target_layer_index}의 레이어 사용: {target_layer}")
+                return target_layer
+            else:
+                print(f"인덱스 {target_layer_index}가 유효하지 않습니다. (0-{len(model_layers)-1} 범위)")
+                return None
+        
+        # 자동 검색 (기존 로직)
+        print("자동으로 적합한 타겟 레이어를 찾습니다...")
         
         # 모델의 레이어들을 역순으로 탐색하여 concat() 레이어 찾기
-        for idx, layers in reversed(list(enumerate(self.model.model.model))):
+        for idx, layers in reversed(list(enumerate(model_layers))):
             if str(layers).lower() == "concat()":
                 print(f"마지막 concat()의 인덱스: {idx}")
                 print(f"마지막 concat() 모델: {layers}")
                 target_layer = layers
+                self.target_layer_index = idx  # 인덱스 저장
                 break
         else:
             print("concat()을 찾을 수 없습니다.")
-            # 기본값으로 마지막 레이어 사용
-            target_layer = self.model.model.model[-1]
+            # 기본값으로 마지막에서 두 번째 레이어 사용
+            target_layer = model_layers[-2]
+            self.target_layer_index = len(model_layers) - 2  # 인덱스 저장
             print(f"기본 타겟 레이어 사용: {target_layer}")
         
         return target_layer
     
-    def get_target_layers(self) -> Optional[List]:
+    def get_target_layers(self, target_layer_index: Optional[int] = None) -> Optional[List]:
         """
-        저장된 타겟 레이어를 반환합니다.
+        타겟 레이어를 반환합니다. 사용자가 지정한 인덱스가 있으면 해당 레이어를, 없으면 저장된 레이어를 사용합니다.
         
+        Args:
+            target_layer_index: 특정 인덱스의 레이어 사용 (0부터 시작)
+            
         Returns:
             Optional[List]: 타겟 레이어 리스트 또는 None
         """
+        if self.model is None:
+            print("Model not loaded. Please load model first.")
+            return None
+        
+        # 저장된 타겟 레이어 사용
         if self.target_layers is None:
             print("Target layers not found. Please load model first.")
             return None
@@ -258,13 +287,14 @@ class XAIAnalyzer:
         return [self.target_layers]
     
     def generate_cam(self, image_path: str, target_layers: Optional[List] = None, 
-                    use_rgb: bool = True) -> Dict:
+                    target_layer_index: Optional[int] = None, use_rgb: bool = True) -> Dict:
         """
         이미지에 대해 CAM (Class Activation Mapping)을 생성합니다.
         
         Args:
             image_path: 이미지 파일 경로
             target_layers: CAM 분석에 사용할 타겟 레이어 리스트 (None이면 자동 선택)
+            target_layer_index: 특정 인덱스의 레이어 사용 (0부터 시작)
             use_rgb: RGB 이미지 사용 여부
             
         Returns:
@@ -280,7 +310,7 @@ class XAIAnalyzer:
             
             # 타겟 레이어 설정
             if target_layers is None:
-                target_layers = self.get_target_layers()
+                target_layers = self.get_target_layers(target_layer_index)
                 if target_layers is None:
                     raise ValueError("Could not find suitable target layer")
             
@@ -290,14 +320,13 @@ class XAIAnalyzer:
             # CAM 생성
             grayscale_cam = cam(rgb_img)[0, :, :]
             
-            # CAM을 원본 이미지에 오버레이
-            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
+            # 디버깅: CAM 데이터 정보 출력
+            print(f"    🔍 Generated CAM data: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
+            print(f"    🔍 CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
             
-            # 결과 저장
+            # 결과 저장 (이미지 경로만 저장, 실제 이미지 데이터는 제외)
             result = {
-                'original_image': rgb_img,
                 'grayscale_cam': grayscale_cam,
-                'cam_image': cam_image,
                 'target_layers': [str(layer) for layer in target_layers],
                 'image_path': image_path
             }
@@ -307,103 +336,7 @@ class XAIAnalyzer:
         except Exception as e:
             print(f"Error generating CAM for {image_path}: {e}")
             return None
-    
-    def save_cam_result(self, cam_result: Dict, output_path: str, save_original: bool = True):
-        """
-        CAM 결과를 파일로 저장합니다.
-        
-        Args:
-            cam_result: CAM 분석 결과
-            output_path: 저장할 파일 경로
-            save_original: 원본 이미지도 함께 저장할지 여부
-        """
-        if cam_result is None:
-            print("No CAM result to save")
-            return
-        
-        try:
-            # CAM 이미지 저장
-            cam_image = cam_result['cam_image']
-            cv2.imwrite(output_path, cam_image)
-            print(f"CAM image saved to: {output_path}")
-            
-            # 원본 이미지도 저장 (선택사항)
-            if save_original:
-                original_path = output_path.replace('.jpg', '_original.jpg').replace('.png', '_original.png')
-                cv2.imwrite(original_path, cam_result['original_image'])
-                print(f"Original image saved to: {original_path}")
-                
-        except Exception as e:
-            print(f"Error saving CAM result: {e}")
-    
-    def visualize_cam(self, cam_result: Dict, figsize: Tuple[int, int] = (15, 5)):
-        """
-        CAM 결과를 시각화합니다.
-        
-        Args:
-            cam_result: CAM 분석 결과
-            figsize: 그래프 크기
-        """
-        if cam_result is None:
-            print("No CAM result to visualize")
-            return
-        
-        fig, axes = plt.subplots(1, 3, figsize=figsize)
-        
-        # 원본 이미지
-        axes[0].imshow(cv2.cvtColor(cam_result['original_image'], cv2.COLOR_BGR2RGB))
-        axes[0].set_title('Original Image')
-        axes[0].axis('off')
-        
-        # Grayscale CAM
-        axes[1].imshow(cam_result['grayscale_cam'], cmap='jet')
-        axes[1].set_title('Grayscale CAM')
-        axes[1].axis('off')
-        
-        # CAM 오버레이 이미지
-        axes[2].imshow(cv2.cvtColor(cam_result['cam_image'], cv2.COLOR_BGR2RGB))
-        axes[2].set_title('CAM Overlay')
-        axes[2].axis('off')
-        
-        plt.tight_layout()
-        plt.show()
-    
-    def analyze_image_with_cam(self, image_path: str, output_dir: Optional[str] = None,
-                             save_results: bool = True, visualize: bool = True) -> Dict:
-        """
-        이미지를 CAM과 함께 분석합니다.
-        
-        Args:
-            image_path: 이미지 파일 경로
-            output_dir: 결과 저장 디렉토리 (None이면 저장하지 않음)
-            save_results: 결과를 파일로 저장할지 여부
-            visualize: 결과를 시각화할지 여부
-            
-        Returns:
-            Dict: 분석 결과
-        """
-        print(f"Analyzing image with CAM: {image_path}")
-        
-        # CAM 생성
-        cam_result = self.generate_cam(image_path)
-        
-        if cam_result is None:
-            print(f"Failed to generate CAM for {image_path}")
-            return None
-        
-        # 결과 저장
-        if save_results and output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-            filename = os.path.basename(image_path)
-            name, ext = os.path.splitext(filename)
-            output_path = os.path.join(output_dir, f"{name}_cam{ext}")
-            self.save_cam_result(cam_result, output_path)
-        
-        # 시각화
-        if visualize:
-            self.visualize_cam(cam_result)
-        
-        return cam_result
+
     
     def calculate_cam_statistics(self, cam: np.ndarray) -> Dict:
         """
@@ -468,6 +401,45 @@ class XAIAnalyzer:
             adaptive_cam = cam_filtered
         
         return adaptive_cam
+    
+    def find_optimal_threshold_for_components(self, cam: np.ndarray, percentile_range: tuple = (50, 95)) -> Dict:
+        """
+        컴포넌트 개수가 최대가 되는 최적 임계값을 찾습니다.
+        
+        Args:
+            cam: CAM 데이터
+            percentile_range: 탐색할 백분위수 범위 (min, max)
+            
+        Returns:
+            Dict: 최적 임계값 정보
+        """
+        min_percentile, max_percentile = percentile_range
+        percentiles = range(min_percentile, max_percentile + 1, 5)  # 5% 간격으로 탐색
+        
+        best_num_components = 0
+        best_threshold = 0
+        best_percentile = 0
+        component_counts = []
+        
+        for percentile in percentiles:
+            threshold = np.percentile(cam, percentile)
+            binary_mask = cam > threshold
+            labeled_mask, num_components = ndimage.label(binary_mask)
+            
+            component_counts.append(num_components)
+            
+            if num_components > best_num_components:
+                best_num_components = num_components
+                best_threshold = threshold
+                best_percentile = percentile
+        
+        return {
+            'optimal_percentile': best_percentile,
+            'optimal_threshold': best_threshold,
+            'max_components': best_num_components,
+            'percentiles_tested': list(percentiles),
+            'component_counts': component_counts
+        }
     
     def analyze_connected_components(self, cam: np.ndarray, threshold_percentile: int = 85) -> Dict:
         """
@@ -720,7 +692,7 @@ class XAIAnalyzer:
         Args:
             cam: CAM 데이터
             boxes: 검출된 박스 좌표
-            names: 클래스명 리스트
+            names: 클래스명과 신뢰도가 포함된 리스트 (예: "car 0.95")
             threshold_percentile: 임계값 백분위수
             
         Returns:
@@ -728,6 +700,21 @@ class XAIAnalyzer:
         """
         if len(boxes) == 0:
             return None
+        
+        # 신뢰도 정보 추출
+        class_names = []
+        confidences = []
+        for name in names:
+            # "class_name confidence" 형식에서 분리
+            parts = name.split()
+            if len(parts) >= 2:
+                class_name = ' '.join(parts[:-1])  # 마지막 부분을 제외한 모든 부분이 클래스명
+                confidence = float(parts[-1])
+            else:
+                class_name = name
+                confidence = 1.0
+            class_names.append(class_name)
+            confidences.append(confidence)
         
         # 가장 큰 bbox 찾기
         areas = []
@@ -739,7 +726,8 @@ class XAIAnalyzer:
         largest_idx = np.argmax(areas)
         largest_bbox = boxes[largest_idx]
         largest_area = areas[largest_idx]
-        largest_name = names[largest_idx]
+        largest_name = class_names[largest_idx]
+        largest_confidence = confidences[largest_idx]
         
         # bbox 정보 추출
         x1, y1, x2, y2 = largest_bbox
@@ -788,10 +776,16 @@ class XAIAnalyzer:
             'largest_bbox_idx': largest_idx,
             'all_areas': areas,
             'largest_class_name': largest_name,
-            'all_class_names': names,
+            'largest_confidence': largest_confidence,
+            'all_class_names': class_names,
+            'all_confidences': confidences,
+            # 시각화를 위한 추가 정보
+            'all_bboxes': boxes.tolist(),  # 모든 bbox 좌표
+            'bbox_names': class_names,  # 모든 bbox 클래스명 (신뢰도 제외)
         }
     
     def comprehensive_cam_analysis(self, image_path: str, target_layers: Optional[List] = None,
+                                 target_layer_index: Optional[int] = None,
                                  save_visualizations: bool = False, output_dir: Optional[str] = None) -> Dict:
         """
         CAM에 대한 포괄적인 분석을 수행합니다.
@@ -799,6 +793,7 @@ class XAIAnalyzer:
         Args:
             image_path: 이미지 파일 경로
             target_layers: 타겟 레이어 리스트
+            target_layer_index: 특정 인덱스의 레이어 사용 (0부터 시작)
             save_visualizations: 시각화 결과 저장 여부 (CAM 이미지 등)
             output_dir: 시각화 결과 저장 디렉토리 (save_visualizations=True일 때만 사용)
             
@@ -809,9 +804,9 @@ class XAIAnalyzer:
         
         # CAM 생성 (타겟 레이어가 제공되지 않으면 저장된 타겟 레이어 사용)
         if target_layers is None:
-            target_layers = self.get_target_layers()
+            target_layers = self.get_target_layers(target_layer_index)
         
-        cam_result = self.generate_cam(image_path, target_layers)
+        cam_result = self.generate_cam(image_path, target_layers, target_layer_index)
         if cam_result is None:
             return None
         
@@ -823,8 +818,9 @@ class XAIAnalyzer:
         # 2. Adaptive 쓰레스홀딩
         adaptive_cam = self.adaptive_thresholding(grayscale_cam)
         
-        # 3. Connected Components 분석
-        components_analysis = self.analyze_connected_components(grayscale_cam)
+        # 3. 최적 임계값 찾기 및 Connected Components 분석
+        optimal_threshold_info = self.find_optimal_threshold_for_components(grayscale_cam)
+        components_analysis = self.analyze_connected_components(grayscale_cam, optimal_threshold_info['optimal_percentile'])
         
         # 4. Centroid 계산
         centroids = self.calculate_cam_centroids(grayscale_cam)
@@ -833,7 +829,8 @@ class XAIAnalyzer:
         entropy_results = self.calculate_cam_entropy(grayscale_cam)
         
         # 6. 객체 검출 및 Overlap 분석
-        rgb_img = cam_result['original_image']
+        # 원본 이미지 로드
+        rgb_img = cv2.imread(cam_result['image_path'])
         results = self.model(rgb_img)
         boxes, colors, names = self.parse_detections(results)
         
@@ -841,43 +838,67 @@ class XAIAnalyzer:
         if len(boxes) > 0:
             overlap_results = self.calculate_cam_bbox_overlap(grayscale_cam, boxes, names)
         
-        # 시각화 결과 저장 (선택사항)
+        # 시각화 결과 저장 (선택사항) - 원본 이미지 경로만 저장
         visualization_paths = {}
         if save_visualizations and output_dir:
             os.makedirs(output_dir, exist_ok=True)
             filename = os.path.basename(image_path)
             name, ext = os.path.splitext(filename)
             
-            # CAM 이미지 저장
-            cam_image_path = os.path.join(output_dir, f"{name}_cam_overlay{ext}")
-            cv2.imwrite(cam_image_path, cam_result['cam_image'])
-            visualization_paths['cam_overlay'] = cam_image_path
+            # 원본 이미지 경로만 저장 (실제 이미지는 필요시 로드)
+            visualization_paths['original_image'] = image_path
             
-            # 원본 이미지 저장
-            original_image_path = os.path.join(output_dir, f"{name}_original{ext}")
-            cv2.imwrite(original_image_path, cam_result['original_image'])
-            visualization_paths['original_image'] = original_image_path
-            
-            print(f"Visualization files saved to: {output_dir}")
+            print(f"Original image path saved: {image_path}")
         
-        # 결과 통합 (캐시에 저장될 데이터) - 크기 최적화
+        # CAM 데이터를 원본 그대로 저장 (캐시 디렉토리 안에)
+        cam_output_dir = os.path.join(output_dir, 'cam_data') if output_dir else None
+        cam_file_path = None
+        
+        if cam_output_dir:
+            # 원본 CAM 데이터 저장 (압축 없음)
+            cam_file_path = self.save_cam_data_original(image_path, grayscale_cam, cam_output_dir)
+        
+        # 결과 통합 (캐시에 저장될 데이터) - CAM 파일 경로만 저장
         comprehensive_result = {
             'image_path': image_path,
+            'cam_file_path': cam_file_path,  # 원본 CAM 파일 경로
+            'target_layers': [str(layer) for layer in target_layers] if target_layers else [],
+            'target_layer_index': self.target_layer_index,  # 저장된 타겟 레이어 인덱스
             'cam_stats': cam_stats,
+            # CAM 메타데이터도 저장 (용량 최적화)
+            'cam_metadata': {
+                'shape': grayscale_cam.shape,
+                'min': float(grayscale_cam.min()),
+                'max': float(grayscale_cam.max()),
+                'mean': float(grayscale_cam.mean()),
+                'std': float(grayscale_cam.std()),
+                'percentiles': {
+                    '25': float(np.percentile(grayscale_cam, 25)),
+                    '50': float(np.percentile(grayscale_cam, 50)),
+                    '75': float(np.percentile(grayscale_cam, 75)),
+                    '85': float(np.percentile(grayscale_cam, 85)),
+                    '90': float(np.percentile(grayscale_cam, 90)),
+                    '95': float(np.percentile(grayscale_cam, 95))
+                }
+            },
+            'adaptive_thresholding': {
+                'percentile': 85,
+                'threshold': float(np.percentile(grayscale_cam, 85)),
+                'active_ratio': float(np.sum(grayscale_cam > np.percentile(grayscale_cam, 85)) / grayscale_cam.size * 100)
+            },
             'components_analysis': {
                 'threshold': components_analysis['threshold'],
                 'active_pixels': components_analysis['active_pixels'],
                 'active_ratio': components_analysis['active_ratio'],
                 'num_components': components_analysis['num_components'],
-                # 큰 배열 데이터는 제거
-                'size_stats': components_analysis.get('size_stats', {})
+                'size_stats': components_analysis.get('size_stats', {}),
+                'optimal_threshold_info': optimal_threshold_info  # 최적 임계값 정보 저장
             },
             'centroids': centroids,
             'entropy_results': entropy_results,
             'detection_results': {
-                'boxes': boxes.tolist() if len(boxes) > 0 else [],  # numpy array를 list로 변환
+                'boxes': boxes.tolist() if len(boxes) > 0 else [],
                 'names': names
-                # colors는 제거 (재생성 가능)
             },
             'overlap_results': overlap_results,
             'visualization_paths': visualization_paths if save_visualizations else {},
@@ -886,3 +907,114 @@ class XAIAnalyzer:
         }
         
         return comprehensive_result
+
+    def get_cache_size_info(self, comprehensive_result: Dict) -> Dict:
+        """
+        캐시 크기 정보를 반환합니다.
+        
+        Args:
+            comprehensive_result: 포괄적인 분석 결과
+            
+        Returns:
+            Dict: 캐시 크기 정보
+        """
+        import sys
+        import json
+        
+        # 딕셔너리를 JSON으로 직렬화하여 크기 측정
+        try:
+            json_str = json.dumps(comprehensive_result)
+            size_bytes = len(json_str.encode('utf-8'))
+            size_mb = size_bytes / (1024 * 1024)
+            
+            # 각 키별 크기 분석
+            key_sizes = {}
+            for key, value in comprehensive_result.items():
+                if key == 'grayscale_cam':
+                    # CAM 데이터는 매우 클 수 있으므로 별도 처리
+                    if isinstance(value, list):
+                        cam_size = len(value) * 4  # float32 = 4 bytes
+                        key_sizes[key] = f"{cam_size / (1024*1024):.2f} MB"
+                    else:
+                        key_sizes[key] = "N/A"
+                else:
+                    try:
+                        key_json = json.dumps(value)
+                        key_size = len(key_json.encode('utf-8'))
+                        key_sizes[key] = f"{key_size / 1024:.2f} KB"
+                    except:
+                        key_sizes[key] = "N/A"
+            
+            return {
+                'total_size_mb': size_mb,
+                'total_size_bytes': size_bytes,
+                'key_sizes': key_sizes
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'total_size_mb': 0,
+                'key_sizes': {}
+            }
+
+
+    
+    def save_cam_data_original(self, image_path: str, grayscale_cam: np.ndarray, output_dir: str) -> str:
+        """
+        CAM 데이터를 원본 그대로 저장합니다 (numpy .npy 형식)
+        
+        Args:
+            image_path: 원본 이미지 경로
+            grayscale_cam: CAM 데이터
+            output_dir: 저장할 디렉토리
+            
+        Returns:
+            str: 저장된 CAM 파일 경로
+        """
+        import os
+        
+        # 출력 디렉토리 생성
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 파일명 생성 (.npy 확장자)
+        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        cam_file = os.path.join(output_dir, f"{base_name}_cam_original.npy")
+        
+        # numpy .npy 형식으로 저장
+        np.save(cam_file, grayscale_cam)
+        
+        # 디버깅: 저장된 CAM 데이터 정보 출력
+        print(f"    🔍 Saved CAM data: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
+        print(f"    🔍 Saved CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
+        
+        # 크기 정보 출력
+        original_size = grayscale_cam.nbytes
+        file_size = os.path.getsize(cam_file)
+        compression_ratio = (1 - file_size / original_size) * 100
+        
+        print(f"CAM data original: {original_size/1024:.1f}KB → {file_size/1024:.1f}KB ({compression_ratio:.1f}% reduction)")
+        print(f"Saved to: {cam_file}")
+        
+        return cam_file
+    
+
+    
+    def load_cam_data_original(self, cam_file_path: str) -> np.ndarray:
+        """
+        원본 CAM 데이터를 파일에서 로드합니다 (numpy .npy 형식)
+        
+        Args:
+            cam_file_path: CAM 파일 경로
+            
+        Returns:
+            np.ndarray: 원본 CAM 데이터
+        """
+        # numpy .npy 형식에서 로드
+        loaded_cam = np.load(cam_file_path)
+        
+        # 디버깅: 로드된 CAM 데이터 정보 출력
+        print(f"    🔍 Loaded CAM data: shape={loaded_cam.shape}, dtype={loaded_cam.dtype}")
+        print(f"    🔍 Loaded CAM data stats: min={loaded_cam.min():.6f}, max={loaded_cam.max():.6f}, mean={loaded_cam.mean():.6f}")
+        
+        return loaded_cam

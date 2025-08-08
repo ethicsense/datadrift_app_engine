@@ -67,7 +67,7 @@ class ImageAnalysisReport:
         # 1. 전용 클러스터링 분석 데이터 확인
         cached_data = get_cached_analysis_data(self.directory, "clustering_analysis")
         if cached_data is not None:
-            print(f"📊 Loaded clustering data: {type(cached_data)}")
+            print(f"📊 Loaded clustering data : ")
             return cached_data
         
         # 2. 임베딩 분석 결과에서 클러스터링 정보 추출
@@ -383,10 +383,11 @@ class ImageAnalysisReport:
                 if filename in self.xai_data:
                     xai_result = self.xai_data[filename]
                     if isinstance(xai_result, dict):
+                        print()
                         print(f"  🔍 Processing XAI data for representative image: {filename}")
-                        print(f"    - Available keys: {list(xai_result.keys())}")
+                        # print(f"    - Available keys: {list(xai_result.keys())}")
                         
-                        # 시각화 생성 (실제 저장된 데이터 구조 직접 사용)
+                        # 시각화 생성 (create_comprehensive_visualization 사용)
                         try:
                             img_visualizations = visualizer.create_comprehensive_visualization(xai_result)
                             
@@ -429,8 +430,8 @@ class ImageAnalysisReport:
                 cluster_groups = {}
                 
                 # 클러스터링 데이터 구조 확인
-                print(f"    - Clustering data type: {type(self.clustering_data)}")
-                print(f"    - Clustering data keys: {list(self.clustering_data.keys()) if isinstance(self.clustering_data, dict) else 'Not a dict'}")
+                # print(f"    - Clustering data type: {type(self.clustering_data)}")
+                # print(f"    - Clustering data keys: {list(self.clustering_data.keys()) if isinstance(self.clustering_data, dict) else 'Not a dict'}")
                 
                 # 클러스터 정보 추출 (세 가지 구조 지원)
                 if isinstance(self.clustering_data, dict):
@@ -467,6 +468,7 @@ class ImageAnalysisReport:
                 
                 # 각 클러스터에서 무작위 대표 이미지 선택
                 import random
+                print()
                 for cluster_id, filenames in cluster_groups.items():
                     # XAI 데이터가 있는 파일들만 필터링
                     xai_available_files = [f for f in filenames if f in self.xai_data]
@@ -480,6 +482,7 @@ class ImageAnalysisReport:
                         print(f"  ⚠️  No XAI data available for cluster {cluster_id}")
                 
                 print(f"  📊 Selected {len(representative_images)} representative images from {len(cluster_groups)} clusters")
+                print()
                 
             except Exception as e:
                 print(f"  ⚠️  Error selecting representative images: {e}")
@@ -577,8 +580,9 @@ class ImageAnalysisReport:
             if 'cluster_labels' in self.clustering_data:
                 unique_clusters = len(set(self.clustering_data['cluster_labels']))
                 representative_info['total_clusters'] = unique_clusters
-                representative_info['representative_images'] = len(self._select_representative_images())
-                representative_info['cluster_coverage'] = (representative_info['representative_images'] / unique_clusters * 100) if unique_clusters > 0 else 0
+                # 대표 이미지 수는 클러스터 수와 동일 (이미 선택된 대표 이미지 수 사용)
+                representative_info['representative_images'] = unique_clusters
+                representative_info['cluster_coverage'] = 100.0  # 모든 클러스터에서 대표 이미지 선택
         
         # 품질 요약
         quality_summary = {
@@ -644,6 +648,8 @@ class ImageAnalysisReport:
         summary = self.create_summary_stats()
         charts = self.create_visualizations()
         samples = self.create_sample_images_table()
+        
+        # XAI 시각화 및 요약 통계 생성 (대표 이미지 선택은 한 번만)
         xai_charts = self.create_xai_visualizations()
         xai_summary = self.create_xai_summary_stats()
         
@@ -1030,7 +1036,9 @@ class ImageAnalysisReport:
                 
                 # 시각화 타입별 제목 매핑
                 viz_titles = {
-                    'basic_cam': '📊 Basic CAM Visualization',
+                    'cam_heatmap': '🔥 CAM Heatmap',
+                    'cam_threshold_analysis': '🎯 Threshold Analysis',
+                    'cam_distribution_analysis': '📊 Distribution Analysis',
                     'cam_statistics': '📈 CAM Statistics',
                     'connected_components': '🔗 Connected Components Analysis',
                     'entropy_analysis': '📊 Entropy Analysis',

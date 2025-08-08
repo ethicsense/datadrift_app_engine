@@ -31,7 +31,7 @@ class CacheManager:
         
         # 캐시 설정
         self.cache_expiry_days = int(os.getenv('DATADRIFT_CACHE_EXPIRY_DAYS', '30'))
-        self.max_cache_size_mb = int(os.getenv('DATADRIFT_CACHE_MAX_SIZE_MB', '2000'))
+        self.max_cache_size_mb = int(os.getenv('DATADRIFT_CACHE_MAX_SIZE_MB', '999999'))
     
     def _get_cache_key(self, identifier, content_type="html"):
         """캐시 키 생성"""
