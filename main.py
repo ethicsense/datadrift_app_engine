@@ -109,8 +109,7 @@ def run_attribute_analysis_wrapper(directories, formats):
     Returns:
         dict: 각 디렉토리별 처리된 파일 수 정보
     """
-    print("Starting attribute analysis...")
-    
+
     # 분석 모듈 한 번만 로드
     from data_utils import AttributeAnalyzer
     analyzer = AttributeAnalyzer()
@@ -194,7 +193,7 @@ def run_attribute_analysis_wrapper(directories, formats):
     return processing_stats
 
 
-def run_drift_analysis(directories, formats, model=None, device=None, n_clusters=None, method='kmeans'):
+def run_embedding_analysis(directories, formats, model=None, device=None, n_clusters=None, method='kmeans', cluster_selection_method='silhouette'):
     """
     임베딩 추출과 클러스터링 분석을 수행하고 캐시에 저장합니다.
     디렉토리 탐색하면서 파일을 바로 처리합니다.
@@ -204,12 +203,12 @@ def run_drift_analysis(directories, formats, model=None, device=None, n_clusters
     Returns:
         dict: 각 디렉토리별 처리된 파일 수 정보
     """
-    print("Starting drift analysis (embedding extraction and clustering)...")
+    print("Starting embedding analysis (embedding extraction and clustering)...")
     
     # 분석 모듈 한 번만 로드
-    from data_utils import EmbeddingManager
-    manager = EmbeddingManager(device)
-    manager.load_model("ViT-B/16")
+    from data_utils import EmbeddingAnalyzer
+    analyzer = EmbeddingAnalyzer(device)
+    analyzer.load_model("ViT-B/16")
     
     processing_stats = {}
     
@@ -249,7 +248,7 @@ def run_drift_analysis(directories, formats, model=None, device=None, n_clusters
                     
                     if need_analysis:
                         print(f"Extracting embedding for {file}...")
-                        result = manager.extract_embedding(file_path)
+                        result = analyzer.extract_embedding(file_path)
                         
                         if result:
                             new_cache[file] = result
@@ -312,7 +311,7 @@ def run_drift_analysis(directories, formats, model=None, device=None, n_clusters
                 continue
             
             # 클러스터링 분석 수행
-            clustering_result = manager.perform_clustering(embeddings, file_names, file_paths, n_clusters, method)
+            clustering_result = analyzer.perform_clustering(embeddings, file_names, file_paths, n_clusters, method, cluster_selection_method)
             
             if clustering_result:
                 # 임베딩 해시를 클러스터링 결과에 추가
@@ -383,7 +382,7 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
         
         # XAI 분석기 초기화
         analyzer = XAIAnalyzer(device=device)
-        analyzer.load_model(model_path)
+        analyzer.load_model(model_path, target_layer_index=22)
         
         # 타겟 레이어 확인
         target_layers = analyzer.get_target_layers()
@@ -425,7 +424,7 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
                                 file_path, 
                                 target_layers=target_layers,
                                 save_visualizations=False,
-                                output_dir=None
+                                output_dir=cache_manager.cache_dir
                             )
                             if comprehensive_result:
                                 processed_files += 1
@@ -508,14 +507,7 @@ def run_report(directory, mode):
             # 데이터셋 이름 추출 (디렉토리명 사용)
             dataset_name = os.path.basename(directory)
             
-            # 1. 이미지 분석 HTML 본문 생성 (실시간 생성)
-            from report_generator.create_report import create_report_body
-            html_body = create_report_body(directory)
-            if not html_body:
-                print("❌ Failed to generate HTML body content")
-                return
-            
-            # 2. report_layout.py의 generate_combined_html 함수 사용하여 완전한 HTML 생성
+            # report_layout.py의 generate_combined_html 함수 사용하여 완전한 HTML 생성
             from report_generator.report_layout import generate_combined_html
             
             # 완전한 HTML 보고서 생성
@@ -608,6 +600,11 @@ Examples:
   # Analysis with custom device and formats
   ddoc analysis /path/to/dataset --model-path /path/to/yolo_model.pt --device cuda --format jpg png
   
+  # Analysis with custom cluster selection method
+  ddoc analysis /path/to/dataset --cluster-method silhouette
+  ddoc analysis /path/to/dataset --cluster-method elbow
+  ddoc analysis /path/to/dataset --cluster-method manual
+  
   # Analysis of multiple directories
   ddoc analysis /path/to/dataset1 /path/to/dataset2 --model-path /path/to/yolo_model.pt
   
@@ -627,6 +624,7 @@ Examples:
     parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
     parser_analysis.add_argument('--model-path', help='Path to YOLO model for XAI analysis (optional).')
     parser_analysis.add_argument('--device', default=None, help='Device to use for XAI analysis (cuda/cpu, default: auto).')
+    parser_analysis.add_argument('--cluster-method', choices=['silhouette', 'elbow', 'manual'], default='elbow', help='Method for determining optimal number of clusters.')
 
     # Compare sub-command
     parser_compare = subparsers.add_parser('compare', help='Compare datasets in directories.')
@@ -672,7 +670,7 @@ Examples:
         
         # 기본 속성 분석 및 드리프트 분석
         print("=" * 60)
-        print("🔍 Starting Attribute Analysis and Drift Analysis...")
+        print("🔍 Starting Attribute Analysis...")
         print("=" * 60)
         
         attribute_start = time.time()
@@ -680,10 +678,14 @@ Examples:
         attribute_end = time.time()
         analysis_times['attribute_analysis'] = attribute_end - attribute_start
         
-        drift_start = time.time()
-        drift_stats = run_drift_analysis(args.directories, args.format)
-        drift_end = time.time()
-        analysis_times['drift_analysis'] = drift_end - drift_start
+        print("=" * 60)
+        print("🔍 Starting Embedding Analysis...")
+        print("=" * 60)
+        
+        embedding_start = time.time()
+        embedding_stats = run_embedding_analysis(args.directories, args.format, cluster_selection_method=args.cluster_method)
+        embedding_end = time.time()
+        analysis_times['embedding_analysis'] = embedding_end - embedding_start
         
         # XAI 분석 (모델 경로가 제공된 경우)
         xai_stats = {}
@@ -726,9 +728,9 @@ Examples:
             if directory in attribute_stats:
                 total_processed_files += attribute_stats[directory]['processed_files']
                 total_skipped_files += attribute_stats[directory]['skipped_files']
-            elif directory in drift_stats:
-                total_processed_files += drift_stats[directory]['processed_files']
-                total_skipped_files += drift_stats[directory]['skipped_files']
+            elif directory in embedding_stats:
+                total_processed_files += embedding_stats[directory]['processed_files']
+                total_skipped_files += embedding_stats[directory]['skipped_files']
             elif directory in xai_stats:
                 total_processed_files += xai_stats[directory]['processed_files']
                 total_skipped_files += xai_stats[directory]['skipped_files']
@@ -738,7 +740,7 @@ Examples:
         print("⏱️  ANALYSIS TIME SUMMARY")
         print("=" * 60)
         print(f"📊 Attribute Analysis:     {format_time(analysis_times['attribute_analysis'])}")
-        print(f"📈 Drift Analysis:         {format_time(analysis_times['drift_analysis'])}")
+        print(f"📈 Embedding Analysis:     {format_time(analysis_times['embedding_analysis'])}")
         if args.model_path:
             print(f"🧠 XAI Analysis:           {format_time(analysis_times['xai_analysis'])}")
         else:
@@ -767,8 +769,8 @@ Examples:
             print(f"  📁 {os.path.basename(directory)}:")
             if directory in attribute_stats:
                 print(f"    📊 Attribute: {attribute_stats[directory]['processed_files']} processed, {attribute_stats[directory]['skipped_files']} skipped")
-            if directory in drift_stats:
-                print(f"    📈 Drift: {drift_stats[directory]['processed_files']} processed, {drift_stats[directory]['skipped_files']} skipped")
+            if directory in embedding_stats:
+                print(f"    📈 Embedding: {embedding_stats[directory]['processed_files']} processed, {embedding_stats[directory]['skipped_files']} skipped")
             if directory in xai_stats:
                 print(f"    🧠 XAI: {xai_stats[directory]['processed_files']} processed, {xai_stats[directory]['skipped_files']} skipped")
         
