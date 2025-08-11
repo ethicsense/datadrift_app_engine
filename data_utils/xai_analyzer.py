@@ -531,14 +531,14 @@ class XAIAnalyzer:
     
     def calculate_cam_centroids(self, cam: np.ndarray, methods: List[str] = None) -> Dict:
         """
-        CAM의 centroid 좌표를 다양한 방법으로 계산
+        CAM의 centroid 좌표를 다양한 방법으로 계산하고 confidence score도 함께 제공
         
         Args:
             cam: CAM 데이터
             methods: 사용할 방법 리스트 ['weighted', 'threshold', 'max', 'components']
             
         Returns:
-            Dict: 각 방법별 centroid 좌표
+            Dict: 각 방법별 centroid 좌표와 confidence score
         """
         if methods is None:
             methods = ['weighted', 'threshold', 'max', 'components']
@@ -552,9 +552,22 @@ class XAIAnalyzer:
             if total_weight > 0:
                 weighted_x = np.sum(x_coords * cam) / total_weight
                 weighted_y = np.sum(y_coords * cam) / total_weight
+                
+                # Confidence: 전체 활성화 강도 대비 평균 활성화 강도
+                # 높은 값 = 활성화가 집중되어 있음, 낮은 값 = 활성화가 분산되어 있음
+                mean_activation = np.mean(cam)
+                max_activation = np.max(cam)
+                confidence = mean_activation / max_activation if max_activation > 0 else 0
             else:
                 weighted_x, weighted_y = cam.shape[1] / 2, cam.shape[0] / 2
-            centroids['weighted'] = (weighted_x, weighted_y)
+                confidence = 0
+            
+            centroids['weighted'] = {
+                'x': weighted_x,
+                'y': weighted_y,
+                'confidence': confidence,
+                'description': 'Weighted average based on activation intensity'
+            }
         
         # 2. 임계값 기반 centroid
         if 'threshold' in methods:
@@ -564,15 +577,40 @@ class XAIAnalyzer:
                 y_coords, x_coords = np.where(active_mask)
                 threshold_x = np.mean(x_coords)
                 threshold_y = np.mean(y_coords)
+                
+                # Confidence: 임계값 이상 활성화된 영역의 비율과 강도
+                # 높은 값 = 명확한 활성화 영역, 낮은 값 = 흐릿한 활성화 패턴
+                active_ratio = np.sum(active_mask) / cam.size
+                active_intensity = np.mean(cam[active_mask]) / np.max(cam) if np.max(cam) > 0 else 0
+                confidence = active_ratio * active_intensity
             else:
                 threshold_x, threshold_y = cam.shape[1] / 2, cam.shape[0] / 2
-            centroids['threshold'] = (threshold_x, threshold_y)
+                confidence = 0
+            
+            centroids['threshold'] = {
+                'x': threshold_x,
+                'y': threshold_y,
+                'confidence': confidence,
+                'description': 'Centroid of pixels above 85th percentile threshold'
+            }
         
         # 3. 최대 활성도 위치
         if 'max' in methods:
             max_idx = np.unravel_index(np.argmax(cam), cam.shape)
             max_y, max_x = max_idx
-            centroids['max'] = (max_x, max_y)
+            
+            # Confidence: 최대값과 평균값의 차이 (피크의 뾰족함)
+            # 높은 값 = 뚜렷한 피크, 낮은 값 = 평평한 활성화 패턴
+            max_val = np.max(cam)
+            mean_val = np.mean(cam)
+            confidence = (max_val - mean_val) / max_val if max_val > 0 else 0
+            
+            centroids['max'] = {
+                'x': max_x,
+                'y': max_y,
+                'confidence': confidence,
+                'description': 'Location of maximum activation value'
+            }
         
         # 4. Connected Components 기반 centroid
         if 'components' in methods:
@@ -596,9 +634,22 @@ class XAIAnalyzer:
                 
                 largest_idx = np.argmax(component_sizes)
                 largest_x, largest_y = component_centroids[largest_idx]
-                centroids['components'] = (largest_x, largest_y)
+                
+                # Confidence: 가장 큰 연결 컴포넌트의 비율
+                # 높은 값 = 하나의 큰 활성화 영역, 낮은 값 = 여러 개의 작은 활성화 영역
+                total_active_pixels = np.sum(binary_mask)
+                largest_component_size = component_sizes[largest_idx]
+                confidence = largest_component_size / total_active_pixels if total_active_pixels > 0 else 0
             else:
-                centroids['components'] = (cam.shape[1] / 2, cam.shape[0] / 2)
+                largest_x, largest_y = cam.shape[1] / 2, cam.shape[0] / 2
+                confidence = 0
+            
+            centroids['components'] = {
+                'x': largest_x,
+                'y': largest_y,
+                'confidence': confidence,
+                'description': 'Centroid of largest connected component'
+            }
         
         return centroids
     
@@ -685,15 +736,14 @@ class XAIAnalyzer:
         return entropy_results
     
     def calculate_cam_bbox_overlap(self, cam: np.ndarray, boxes: np.ndarray, 
-                                  names: List[str], threshold_percentile: int = 85) -> Dict:
+                                  names: List[str]) -> Dict:
         """
-        CAM 활성 영역과 가장 큰 bbox 간의 overlap 계산
+        CAM 활성 영역과 가장 큰 bbox 간의 overlap 계산 (임계값 없이 모든 활성화 값 활용)
         
         Args:
             cam: CAM 데이터
             boxes: 검출된 박스 좌표
             names: 클래스명과 신뢰도가 포함된 리스트 (예: "car 0.95")
-            threshold_percentile: 임계값 백분위수
             
         Returns:
             Dict: Overlap 분석 결과
@@ -743,9 +793,8 @@ class XAIAnalyzer:
         bbox_mask = np.zeros_like(cam, dtype=bool)
         bbox_mask[y1:y2+1, x1:x2+1] = True
         
-        # CAM 활성 영역 마스크 생성
-        threshold = np.percentile(cam, threshold_percentile)
-        cam_active_mask = cam > threshold
+        # CAM 활성 영역 마스크 생성 (임계값 없이 모든 활성화 값 활용)
+        cam_active_mask = cam > 0  # 0보다 큰 모든 값을 활성 영역으로 간주
         
         # Overlap 계산
         intersection = np.logical_and(bbox_mask, cam_active_mask)
@@ -782,6 +831,11 @@ class XAIAnalyzer:
             # 시각화를 위한 추가 정보
             'all_bboxes': boxes.tolist(),  # 모든 bbox 좌표
             'bbox_names': class_names,  # 모든 bbox 클래스명 (신뢰도 제외)
+            'threshold_info': {
+                'threshold': 0.0,
+                'threshold_percentile': 0,
+                'method': 'no_threshold_all_activations'
+            }
         }
     
     def comprehensive_cam_analysis(self, image_path: str, target_layers: Optional[List] = None,
