@@ -526,6 +526,22 @@ def run_report(directory, mode):
                     f.write(complete_html)
                 print(f"Complete HTML report saved to: {output_file}")
                 
+                # XAI 가이드라인도 함께 생성
+                try:
+                    from report_generator.guideline_generator import create_xai_guideline
+                    
+                    print("\n📚 Generating Guideline Docs...")
+                    xai_guideline_file = os.path.join(cache_manager.cache_dir, f'{dataset_name}_xai_guideline.html')
+                    create_xai_guideline(xai_guideline_file)
+                    print(f"✅ XAI Guideline saved to: {xai_guideline_file}")
+                        
+                except ImportError as e:
+                    print(f"⚠️  Could not import guideline generator: {e}")
+                    print("💡 XAI guideline generation skipped")
+                except Exception as e:
+                    print(f"⚠️  Error generating XAI guideline: {e}")
+                    print("💡 XAI guideline generation skipped")
+                
             else:
                 print("❌ Failed to generate complete HTML report.")
                 return
@@ -558,22 +574,41 @@ def run_report(directory, mode):
         print("Please use 'html' mode for now.")
 
 
-def run_webapp(port=5555, debug=False):
+def run_webapp(port=None, debug=False, fiftyone_port=None):
     """Flask 웹앱을 실행합니다."""
     try:
         # flask_webapp 디렉토리를 Python 경로에 추가
         flask_webapp_dir = os.path.join(os.path.dirname(__file__), 'flask_webapp')
         sys.path.insert(0, flask_webapp_dir)
         
+        # config에서 기본값 가져오기
+        try:
+            from config import config
+            flask_port = port if port is not None else config.flask_port
+            fiftyone_port = fiftyone_port if fiftyone_port is not None else config.fiftyone_port
+            
+            # FiftyOne 포트 설정
+            config.set_fiftyone_port(fiftyone_port)
+            print(f"✅ Using config values - Flask: {flask_port}, FiftyOne: {fiftyone_port}")
+        except ImportError:
+            # config가 없는 경우 기본값 사용
+            flask_port = port if port is not None else 5555
+            fiftyone_port = fiftyone_port if fiftyone_port is not None else 8159
+            print(f"⚠️  Config not available, using fallback values - Flask: {flask_port}, FiftyOne: {fiftyone_port}")
+        
         # app.py에서 Flask 앱 import
         import app
         
-        print(f"Starting Flask web application on port {port}...")
+        print(f"Starting Flask web application on port {flask_port}...")
+        print(f"FiftyOne app will run on port {fiftyone_port}...")
         print(f"Debug mode: {debug}")
-        print(f"Access the application at: http://localhost:{port}")
+        print(f"Access the application at: http://localhost:{flask_port}")
+        
+        # Flask 앱 초기화 (config 시스템 사용)
+        app.init_app(app.app)
         
         # Flask 앱 실행
-        app.socketio.run(app.app, port=port, debug=debug)
+        app.socketio.run(app.app, port=flask_port, debug=debug)
         
     except ImportError as e:
         print(f"Error importing Flask app: {e}")
@@ -640,7 +675,8 @@ Examples:
 
     # Webapp sub-command
     parser_app = subparsers.add_parser('app', help='Run the Flask web application.')
-    parser_app.add_argument('--port', type=int, default=5555, help='Port to run the web application on.')
+    parser_app.add_argument('--port', type=int, help='Port to run the web application on.')
+    parser_app.add_argument('--fiftyone-port', type=int, help='Port to run the FiftyOne app on.')
     parser_app.add_argument('--debug', action='store_true', help='Run in debug mode.')
     
     # Cache sub-command
@@ -799,7 +835,7 @@ Examples:
         run_report(args.directory, args.mode)
 
     elif args.command == 'app':
-        run_webapp(args.port, args.debug)
+        run_webapp(args.port, args.debug, args.fiftyone_port)
     
     elif args.command == 'cache':
         if args.info:
