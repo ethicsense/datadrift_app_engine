@@ -20,15 +20,38 @@ class MilvusManager:
     def __init__(self):
         self.client = None
 
-    def connect(self, db_file_path):
-        print(f"Connecting to {db_file_path}")
-        if not os.path.exists("db"):
-            print(f"Creating New Database : {db_file_path}")
-            os.makedirs("db")
-            self.client = MilvusClient(os.path.join("db", db_file_path))
+    def connect(self, db_file_path=None):
+        """Milvus 데이터베이스에 연결
+        
+        Args:
+            db_file_path: 데이터베이스 파일 경로 (None이면 기본 경로 사용)
+        """
+        if db_file_path is None:
+            # config에서 기본 경로 가져오기
+            try:
+                from config import config
+                db_file_path = config.get_milvus_connection_string()
+            except ImportError:
+                # config가 없는 경우 기존 방식 사용
+                db_file_path = os.path.join("db", "DAE_data.db")
+        
+        # 디렉토리 경로 추출
+        db_dir = os.path.dirname(db_file_path)
+        
+        print(f"Connecting to Milvus database: {db_file_path}")
+        
+        # 디렉토리가 없으면 생성
+        if not os.path.exists(db_dir):
+            print(f"Creating database directory: {db_dir}")
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # 데이터베이스 연결
+        if os.path.exists(db_file_path):
+            print(f"Connecting to existing database: {db_file_path}")
         else:
-            print(f"Connecting to Existing Database : db/{db_file_path}")
-            self.client = MilvusClient(os.path.join("db", db_file_path))
+            print(f"Creating new database: {db_file_path}")
+        
+        self.client = MilvusClient(db_file_path)
         
     def create_collection(self, collection_name):
         if self.client.has_collection(collection_name):
