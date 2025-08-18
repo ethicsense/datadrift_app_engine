@@ -30,7 +30,7 @@ import platform
 from trainer import train_yolo
 from utils import TensorboardManager, FiftyoneManager, CaptureOutput, InputDataLoader, MilvusManager
 
-def get_milvus_manager(db_path):
+def get_milvus_manager(db_path=None):
     if 'milvus_manager' not in g:
         g.milvus_manager = MilvusManager()
         g.milvus_manager.connect(db_path)
@@ -57,24 +57,17 @@ def is_wsl():
         pass
     return False
 
-parser = argparse.ArgumentParser()
-
-# parser.add_argument("--dataset_dir", type=str, required=True, help="Importing dataset path")
-# parser.add_argument("--dataset_name", type=str, default="imported_dataset", help="Name the dataset you are importing")
-parser.add_argument("--port", type=int, default=8159, help="Port to run the FiftyOne app on")
-parser.add_argument("--db_path", type=str, default="DAE_data.db", help="Path to the Milvus database")
-# parser.add_argument("--dataset_type", type=str, default=None, help="dataset type (51, yolo)")
-
-# 기본값 설정 (import 시에는 기본값 사용)
-default_port = 8159
-default_db_path = "DAE_data.db"
+def create_parser():
+    """Flask 앱 전용 argument parser 생성"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, help="Port to run the FiftyOne app on")
+    return parser
 
 # 데이터셋 로드 및 세션 생성은 애플리케이션 시작 시 한 번만 수행
 tsb_runner = TensorboardManager(port=6006)
 atexit.register(tsb_runner.stop)
 
-fom_runner = FiftyoneManager(port=default_port)
-fiftyone_thread = fom_runner.start()
+# FiftyOne Manager는 config 시스템을 통해 관리
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -87,36 +80,60 @@ sys.stdout = capture_stream
 
 def get_project_paths():
     """flask_webapp 디렉토리 기준으로 주요 디렉토리 경로들을 반환합니다."""
-    flask_webapp_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    return {
-        'flask_webapp_dir': flask_webapp_dir,
-        'models_dir': os.path.join(flask_webapp_dir, 'models'),
-        'datasets_uploads': os.path.join(flask_webapp_dir, 'datasets', 'uploads'),
-        'datasets_exported': os.path.join(flask_webapp_dir, 'datasets', 'exported_datasets'),
-        'logs_dir': os.path.join(flask_webapp_dir, 'logs'),
-        'static_cam_results': os.path.join(flask_webapp_dir, 'static', 'cam_results')
-    }
+    try:
+        from config import config
+        return config.get_project_paths()
+    except ImportError:
+        # config가 없는 경우 기존 방식 사용
+        flask_webapp_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        return {
+            'flask_webapp_dir': flask_webapp_dir,
+            'models_dir': os.path.join(flask_webapp_dir, 'models'),
+            'datasets_uploads': os.path.join(flask_webapp_dir, 'datasets', 'uploads'),
+            'datasets_exported': os.path.join(flask_webapp_dir, 'datasets', 'exported_datasets'),
+            'logs_dir': os.path.join(flask_webapp_dir, 'logs'),
+            'static_cam_results': os.path.join(flask_webapp_dir, 'static', 'cam_results')
+        }
+
+def get_fiftyone_manager():
+    """FiftyOne Manager를 config 시스템을 통해 가져오는 공통 함수"""
+    try:
+        from config import config
+        fom_runner, fiftyone_thread = config.get_fiftyone_manager()
+        print(f"✅ Using FiftyOne Manager from config (port: {fom_runner.port})")
+        return fom_runner, fiftyone_thread
+    except ImportError:
+        from utils import FiftyoneManager
+        fom_runner = FiftyoneManager(port=8159)
+        fiftyone_thread = fom_runner.start()
+        print(f"✅ Using FiftyOne Manager from fallback (port: {fom_runner.port})")
+        return fom_runner, fiftyone_thread
 
 def init_app(app):
     app.model_storage = None
     
-    # 프로젝트 경로 가져오기
-    paths = get_project_paths()
-    
-    # 필수 디렉토리들 확인 및 생성 (절대 경로 사용)
-    required_dirs = [
-        paths['models_dir'],
-        paths['datasets_uploads'],
-        paths['datasets_exported'],
-        paths['logs_dir'],
-        paths['static_cam_results']
-    ]
-    
-    for dir_path in required_dirs:
-        if not os.path.exists(dir_path):
-            print(f"Required directory not found. Creating directory: {dir_path}")
-            os.makedirs(dir_path, exist_ok=True)
+    # 설정 초기화 및 디렉토리 생성
+    try:
+        from config import config
+        config.ensure_directories()
+        print("✅ Using centralized configuration")
+    except ImportError:
+        # config가 없는 경우 기존 방식 사용
+        paths = get_project_paths()
+        required_dirs = [
+            paths['models_dir'],
+            paths['datasets_uploads'],
+            paths['datasets_exported'],
+            paths['logs_dir'],
+            paths['static_cam_results']
+        ]
+        
+        for dir_path in required_dirs:
+            if not os.path.exists(dir_path):
+                print(f"Required directory not found. Creating directory: {dir_path}")
+                os.makedirs(dir_path, exist_ok=True)
+        print("⚠️  Using fallback configuration")
 
 @app.route('/')
 def index():
@@ -140,7 +157,10 @@ def get_existing_datasets():
 def load_existing_dataset():
     dataset_name = request.form.get('saved-datasets')
     dataset = fo.load_dataset(dataset_name)
-    milvus_manager = get_milvus_manager(default_db_path)
+    milvus_manager = get_milvus_manager()
+
+    # FiftyOne Manager 초기화
+    fom_runner, fiftyone_thread = get_fiftyone_manager()
 
     embeddings_by_sample_id = fom_runner.collect_image_embeddings_by_sample_id(dataset, db_client=milvus_manager)
     results = fob.compute_visualization(
@@ -169,7 +189,7 @@ def delete_dataset():
         status_log = []
         
         try:
-            milvus_manager = get_milvus_manager(default_db_path)
+            milvus_manager = get_milvus_manager()
         except Exception as e:
             raise Exception(f"Failed to connect to Milvus: {str(e)}")
 
@@ -457,6 +477,9 @@ def upload_file():
         print(f"Dataset name: {merged_dataset.name}")
         print(f"Dataset size: {len(merged_dataset)}")
         
+        # FiftyOne Manager 초기화
+        fom_runner, fiftyone_thread = get_fiftyone_manager()
+        
         print("\nCalculating Embeddings...")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {device}")
@@ -466,7 +489,7 @@ def upload_file():
         print(f"Total embeddings to insert: {len(data)}")
 
         print("\nInserting Embeddings to Milvus...")
-        milvus_manager = get_milvus_manager(default_db_path)
+        milvus_manager = get_milvus_manager()
         milvus_manager.create_collection(merged_dataset.name)
         milvus_manager.insert(merged_dataset.name, data)
         print(f"Successfully inserted embeddings to Milvus collection: {merged_dataset.name}")
@@ -502,6 +525,9 @@ def upload_file():
 
 @app.route('/dsampler/dataclinic')
 def dataclinic():
+    # FiftyOne Manager 초기화
+    fom_runner, fiftyone_thread = get_fiftyone_manager()
+    
     # list_views를 가져옵니다.
     list_views = fom_runner.session.dataset.list_saved_views()
     
@@ -528,6 +554,9 @@ def dataclinic():
 
 @app.route('/dsampler/export', methods=['POST'])
 def export_selected_view():
+    # FiftyOne Manager 초기화
+    fom_runner, fiftyone_thread = get_fiftyone_manager()
+    
     # 선택된 뷰 가져오기
     selected_view = request.form.get('selected_view')
     selected_format = request.form.get('selected_format')
@@ -1158,13 +1187,23 @@ def load_existing_project():
 
 if __name__ == "__main__":
     # argparse 처리 (직접 실행할 때만)
+    parser = create_parser()
     args = parser.parse_args()
-    default_port = args.port
-    default_db_path = args.db_path
     
-    # 기본값 업데이트
-    fom_runner = FiftyoneManager(port=default_port)
-    fiftyone_thread = fom_runner.start()
+    # config에서 기본값 가져오기
+    try:
+        from config import config
+        flask_port = config.flask_port
+        fiftyone_port = args.port if args.port is not None else config.fiftyone_port
+        
+        # FiftyOne 포트 설정
+        config.set_fiftyone_port(fiftyone_port)
+        print(f"✅ Using config values - Flask: {flask_port}, FiftyOne: {fiftyone_port}")
+    except ImportError:
+        # config가 없는 경우 기본값 사용
+        flask_port = 5555
+        fiftyone_port = args.port if args.port is not None else 8159
+        print(f"⚠️  Config not available, using fallback values - Flask: {flask_port}, FiftyOne: {fiftyone_port}")
     
     init_app(app)
-    socketio.run(app, port=5555, debug=False)
+    socketio.run(app, port=flask_port, debug=False)

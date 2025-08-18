@@ -16,6 +16,16 @@ warnings.filterwarnings('ignore')
 # 캐시 매니저 import
 from cache_utils.cache_manager import get_cached_analysis_data
 
+# XAI 가이드라인 생성기 import
+try:
+    from .xai_guideline_generator import create_xai_guideline
+except ImportError:
+    # 상대 import가 실패할 경우 절대 import 시도
+    try:
+        from xai_guideline_generator import create_xai_guideline
+    except ImportError:
+        create_xai_guideline = None
+
 '''
 📊 {dataset_name} 통합 분석 리포트
 ├── 📊 Dataset Information & Statistics (데이터베이스 분석 결과)
@@ -1092,7 +1102,7 @@ class ImageAnalysisReport:
                 # 원하는 순서로 시각화 타입 정렬
                 desired_order = [
                     'cam_heatmap',
-                    'cam_statistics', 
+                    'cam_statistics',
                     'cam_threshold_analysis',
                     'connected_components',
                     'entropy_analysis',
@@ -1152,15 +1162,39 @@ def create_report_body(directory):
         print(f"❌ Error in create_report_body: {e}")
         return None
 
+def create_xai_guideline_report(output_dir="."):
+    """XAI 가이드라인 보고서를 생성합니다."""
+    if create_xai_guideline is None:
+        print("⚠️  XAI guideline generator not available. Skipping guideline generation.")
+        return None
+    
+    try:
+        output_path = os.path.join(output_dir, "xai_guideline.html")
+        create_xai_guideline(output_path)
+        print(f"📚 XAI 가이드라인이 생성되었습니다: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"❌ Error creating XAI guideline: {e}")
+        return None
+
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 2:
-        print("Usage: python create_report.py <directory>")
+    if len(sys.argv) < 2:
+        print("Usage: python create_report.py <directory> [--guideline]")
         sys.exit(1)
     
     directory = sys.argv[1]
+    
+    # 가이드라인 생성 옵션 확인
+    generate_guideline = "--guideline" in sys.argv
+    
+    # 메인 보고서 생성
     body_content = create_report_body(directory)
     print("Generated HTML body content:")
     print(body_content)
-
+    
+    # 가이드라인 생성 (옵션)
+    if generate_guideline:
+        create_xai_guideline_report()
+    
     print(body_content)

@@ -17,163 +17,7 @@ class XAIVisualizer:
         plt.style.use('default')
         plt.rcParams['font.size'] = 14
     
-    def generate_cam_overlay(self, original_image: np.ndarray, grayscale_cam: np.ndarray, 
-                           use_rgb: bool = True, colormap: str = 'jet') -> np.ndarray:
-        """
-        CAM 오버레이 이미지를 생성합니다.
-        
-        Args:
-            original_image: 원본 이미지 (BGR 형식)
-            grayscale_cam: CAM 데이터 (2D numpy array)
-            use_rgb: RGB 이미지 사용 여부
-            colormap: 색상맵 ('jet', 'hot', 'viridis' 등)
-            
-        Returns:
-            np.ndarray: CAM 오버레이 이미지
-        """
-        try:
-            # 이미지를 float32로 변환하고 정규화
-            img = np.float32(original_image) / 255
-            
-            # CAM 오버레이 생성
-            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=use_rgb)
-            
-            return cam_image
-            
-        except Exception as e:
-            print(f"Error generating CAM overlay: {e}")
-            return original_image
-    
-    def generate_adaptive_cam_overlay(self, original_image: np.ndarray, grayscale_cam: np.ndarray,
-                                    percentile: int = 85, use_rgb: bool = True) -> np.ndarray:
-        """
-        Adaptive 쓰레스홀딩을 적용한 CAM 오버레이를 생성합니다.
-        
-        Args:
-            original_image: 원본 이미지
-            grayscale_cam: CAM 데이터
-            percentile: 임계값 백분위수
-            use_rgb: RGB 이미지 사용 여부
-            
-        Returns:
-            np.ndarray: Adaptive CAM 오버레이 이미지
-        """
-        try:
-            # Adaptive 쓰레스홀딩 적용
-            threshold = np.percentile(grayscale_cam, percentile)
-            cam_filtered = np.where(grayscale_cam > threshold, grayscale_cam, 0)
-            
-            if cam_filtered.max() > 0:
-                adaptive_cam = cam_filtered / cam_filtered.max()
-            else:
-                adaptive_cam = cam_filtered
-            
-            # 오버레이 생성
-            img = np.float32(original_image) / 255
-            cam_image = show_yolocam_on_image(img, adaptive_cam, use_rgb=use_rgb)
-            
-            return cam_image
-            
-        except Exception as e:
-            print(f"Error generating adaptive CAM overlay: {e}")
-            return original_image
-    
-    def generate_cam_overlay_with_options(self, original_image: np.ndarray, grayscale_cam: np.ndarray,
-                                        colormap: str = 'jet', alpha: float = 0.7,
-                                        threshold_percentile: Optional[int] = None) -> np.ndarray:
-        """
-        다양한 옵션을 사용하여 CAM 오버레이를 생성합니다.
-        
-        Args:
-            original_image: 원본 이미지
-            grayscale_cam: CAM 데이터
-            colormap: 색상맵 ('jet', 'hot', 'viridis', 'plasma' 등)
-            alpha: 투명도 (0.0 ~ 1.0)
-            threshold_percentile: 임계값 백분위수 (None이면 전체 사용)
-            
-        Returns:
-            np.ndarray: CAM 오버레이 이미지
-        """
-        try:
-            # 임계값 적용 (선택사항)
-            if threshold_percentile is not None:
-                threshold = np.percentile(grayscale_cam, threshold_percentile)
-                cam_filtered = np.where(grayscale_cam > threshold, grayscale_cam, 0)
-                if cam_filtered.max() > 0:
-                    cam_filtered = cam_filtered / cam_filtered.max()
-                grayscale_cam = cam_filtered
-            
-            # 이미지를 float32로 변환하고 정규화
-            img = np.float32(original_image) / 255
-            
-            # CAM 오버레이 생성
-            cam_image = show_yolocam_on_image(img, grayscale_cam, use_rgb=True)
-            
-            return cam_image
-            
-        except Exception as e:
-            print(f"Error generating CAM overlay with options: {e}")
-            return original_image
-    
-    def generate_comparison_visualization(self, original_image: np.ndarray, grayscale_cam: np.ndarray,
-                                        percentiles: List[int] = [80, 85, 90, 95]) -> str:
-        """
-        다양한 임계값에서의 CAM 오버레이를 비교 시각화합니다.
-        
-        Args:
-            original_image: 원본 이미지
-            grayscale_cam: CAM 데이터
-            percentiles: 비교할 임계값 백분위수 리스트
-            
-        Returns:
-            str: base64 인코딩된 이미지
-        """
-        fig, axes = plt.subplots(2, len(percentiles), figsize=(4*len(percentiles), 8))
-        
-        for i, percentile in enumerate(percentiles):
-            # CAM 오버레이 생성
-            cam_overlay = self.generate_adaptive_cam_overlay(
-                original_image, grayscale_cam, percentile=percentile
-            )
-            
-            # 원본 이미지
-            axes[0, i].imshow(cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB))
-            axes[0, i].set_title(f'Original', fontsize=12, fontweight='bold')
-            axes[0, i].axis('off')
-            
-            # CAM 오버레이
-            axes[1, i].imshow(cv2.cvtColor(cam_overlay, cv2.COLOR_BGR2RGB))
-            axes[1, i].set_title(f'CAM ({percentile}%)', fontsize=12, fontweight='bold')
-            axes[1, i].axis('off')
-        
-        plt.tight_layout()
-        return self.fig_to_base64(fig)
-    
-    def generate_comparison_visualization_from_path(self, image_path: str, grayscale_cam: np.ndarray,
-                                                  percentiles: List[int] = [80, 85, 90, 95]) -> str:
-        """
-        이미지 경로에서 다양한 임계값의 CAM 오버레이를 비교 시각화합니다.
-        
-        Args:
-            image_path: 원본 이미지 파일 경로
-            grayscale_cam: CAM 데이터
-            percentiles: 비교할 임계값 백분위수 리스트
-            
-        Returns:
-            str: base64 인코딩된 이미지
-        """
-        try:
-            # 이미지 로드
-            original_image = cv2.imread(image_path)
-            if original_image is None:
-                raise ValueError(f"Failed to load image: {image_path}")
-            
-            # 기존 함수 호출
-            return self.generate_comparison_visualization(original_image, grayscale_cam, percentiles)
-            
-        except Exception as e:
-            print(f"Error generating comparison visualization from path: {e}")
-            return None
+
     
     def fig_to_base64(self, fig: plt.Figure) -> str:
         """matplotlib figure를 base64 인코딩된 이미지로 변환"""
@@ -183,220 +27,6 @@ class XAIVisualizer:
         img_str = base64.b64encode(buf.getvalue()).decode()
         buf.close()
         return img_str
-    
-
-    
-
-        """CAM 통계 정보 시각화 - 개선된 버전"""
-        fig, axes = plt.subplots(3, 2, figsize=(12, 18))
-        
-        # 데이터 구조 확인 및 안전한 접근
-        def safe_get_stat(stat_name, default_value=0):
-            """안전하게 통계값을 가져오는 헬퍼 함수"""
-            try:
-                if stat_name in cam_stats:
-                    stat_data = cam_stats[stat_name]
-                    print(f"    🔍 Accessing {stat_name}: {type(stat_data)} - {stat_data}")
-                    
-                    if isinstance(stat_data, (list, tuple)) and len(stat_data) >= 2:
-                        result = stat_data[1]  # 값 부분
-                        print(f"    ✅ Extracted value: {result}")
-                        return result
-                    elif isinstance(stat_data, (int, float)):
-                        print(f"    ✅ Direct value: {stat_data}")
-                        return stat_data
-                    elif isinstance(stat_data, str):
-                        print(f"    ⚠️  String value, using default: {stat_data}")
-                        return default_value
-                    else:
-                        print(f"    ⚠️  Unknown type, using default: {type(stat_data)}")
-                        return default_value
-                else:
-                    print(f"    ⚠️  Key {stat_name} not found in cam_stats")
-                    return default_value
-            except (IndexError, TypeError, KeyError) as e:
-                print(f"    ❌ Error accessing {stat_name}: {e}")
-                return default_value
-        
-
-        
-        try:
-            # 디버깅: CAM stats 구조 확인
-            print(f"    🔍 CAM Statistics - CAM stats keys: {list(cam_stats.keys()) if cam_stats else 'None'}")
-            
-            # CAM stats에서 직접 값 추출 (튜플 구조 처리)
-            def extract_stat_value(stat_name, default_value=0):
-                """CAM stats에서 값을 추출하는 헬퍼 함수"""
-                if stat_name in cam_stats:
-                    stat_data = cam_stats[stat_name]
-                    if isinstance(stat_data, (list, tuple)) and len(stat_data) >= 2:
-                        return stat_data[1]  # 값 부분
-                    elif isinstance(stat_data, (int, float)):
-                        return stat_data
-                    else:
-                        print(f"    ⚠️  Unknown stat format for {stat_name}: {type(stat_data)}")
-                        return default_value
-                else:
-                    print(f"    ⚠️  Key {stat_name} not found in cam_stats")
-                    return default_value
-            
-            # CAM stats에서 값 추출
-            mean_val = extract_stat_value('mean', 0)
-            max_val = extract_stat_value('max', 0)
-            min_val = extract_stat_value('min', 0)
-            std_val = extract_stat_value('std', 0)
-            q25_val = extract_stat_value('q25', 0)
-            q50_val = extract_stat_value('q50', 0)
-            q75_val = extract_stat_value('q75', 0)
-            high_activation_ratio = extract_stat_value('high_activation_ratio', 15.0)
-            threshold_85 = extract_stat_value('threshold_90', 0.5)  # 90% 임계값 사용
-            
-            # 디버깅: 추출된 값들 출력
-            print(f"    📊 Extracted values:")
-            print(f"        Mean: {mean_val}, Max: {max_val}, Min: {min_val}")
-            print(f"        Std: {std_val}, Q25: {q25_val}, Q50: {q50_val}, Q75: {q75_val}")
-            print(f"        High Activation Ratio: {high_activation_ratio}%")
-            
-            # CAM 데이터 시뮬레이션 (실제 통계값 사용)
-            total_pixels = extract_stat_value('total_pixels', 50176)  # 224x224 기본값
-            shape = extract_stat_value('shape', (224, 224))
-            
-            # 실제 통계값을 기반으로 CAM 데이터 시뮬레이션
-            np.random.seed(42)  # 재현성을 위한 시드
-            cam_values = np.random.normal(mean_val, std_val, total_pixels)
-            cam_values = np.clip(cam_values, min_val, max_val)
-            
-            # 박스플롯 데이터 준비
-            box_data = [min_val, q25_val, q50_val, q75_val, max_val]
-            axes[0, 0].boxplot([box_data], labels=['CAM Values'], patch_artist=True, 
-                              boxprops=dict(facecolor='lightblue', alpha=0.7))
-            axes[0, 0].set_title('CAM Value Distribution', fontsize=16, fontweight='bold')
-            axes[0, 0].set_ylabel('CAM Value')
-            axes[0, 0].grid(True, alpha=0.3)
-            
-            # 통계값 텍스트 추가
-            stats_text = f'Mean: {mean_val:.4f}\nStd: {std_val:.4f}\nRange: {max_val-min_val:.4f}'
-            axes[0, 0].text(0.02, 0.98, stats_text, transform=axes[0, 0].transAxes, 
-                           verticalalignment='top', fontsize=12, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-            
-            # 2. 활성화 강도 분석 (메타데이터 기반)
-            # 이미 위에서 추출한 값 사용
-            total_pixels = 50176  # 224x224 기본값
-            
-            axes[0, 1].hist(cam_values, bins=50, alpha=0.7, color='green', density=True, 
-                           edgecolor='black', linewidth=0.5)
-            axes[0, 1].set_title('CAM Value Histogram', fontsize=16, fontweight='bold')
-            axes[0, 1].set_xlabel('CAM Value')
-            axes[0, 1].set_ylabel('Density')
-            axes[0, 1].grid(True, alpha=0.3)
-            
-            # 활성화 정보 추가
-            activation_info = f'High Activation: {high_activation_ratio:.1f}%\nTotal Pixels: {total_pixels:,}'
-            axes[0, 1].text(0.02, 0.98, activation_info, transform=axes[0, 1].transAxes, 
-                           verticalalignment='top', fontsize=12, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-            
-            # 3. 임계값별 활성화 분석
-            thresholds = np.linspace(0, max_val, 20)
-            activation_ratios = []
-            
-            for threshold in thresholds:
-                if threshold == 0:
-                    activation_ratios.append(100.0)
-                else:
-                    # 임계값 이상의 활성화 비율 계산 (시뮬레이션)
-                    ratio = np.sum(cam_values >= threshold) / len(cam_values) * 100
-                    activation_ratios.append(ratio)
-            
-            axes[1, 0].plot(thresholds, activation_ratios, 'o-', linewidth=2, markersize=4, 
-                           color='red', markerfacecolor='orange')
-            axes[1, 0].set_title('Activation Ratio vs Threshold', fontsize=16, fontweight='bold')
-            axes[1, 0].set_xlabel('Threshold')
-            axes[1, 0].set_ylabel('Activation Ratio (%)')
-            axes[1, 0].grid(True, alpha=0.3)
-            axes[1, 0].set_ylim(0, 105)
-            
-            # 4. 품질 지표 (Quality Metrics)
-            # 집중도 (Concentration) - 높은 값일수록 활성화가 집중됨
-            concentration = (max_val - mean_val) / (max_val - min_val) if max_val != min_val else 0
-            
-            # 균등성 (Uniformity) - 표준편차가 작을수록 균등
-            uniformity = 1 - (std_val / max_val) if max_val > 0 else 0
-            
-            # 신뢰도 (Confidence) - 활성화 비율과 평균값의 조합
-            confidence = (high_activation_ratio / 100) * (mean_val / max_val) if max_val > 0 else 0
-            
-            quality_metrics = ['Concentration', 'Uniformity', 'Confidence']
-            quality_values = [concentration, uniformity, confidence]
-            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
-            
-            bars = axes[1, 1].bar(quality_metrics, quality_values, color=colors, alpha=0.8)
-            axes[1, 1].set_title('Quality Metrics', fontsize=16, fontweight='bold')
-            axes[1, 1].set_ylabel('Score')
-            axes[1, 1].set_ylim(0, 1)
-            axes[1, 1].grid(True, alpha=0.3)
-            
-            # 값 표시
-            for bar, value in zip(bars, quality_values):
-                height = bar.get_height()
-                axes[1, 1].text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                               f'{value:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
-            
-            # 5. 사분위수 비교 (Quartile Comparison)
-            quartile_data = [q25_val, q50_val, q75_val]
-            quartile_labels = ['Q25', 'Q50\n(Median)', 'Q75']
-            
-            axes[2, 0].bar(quartile_labels, quartile_data, color=['lightcoral', 'coral', 'darkred'], alpha=0.8)
-            axes[2, 0].set_title('Quartile Analysis', fontsize=16, fontweight='bold')
-            axes[2, 0].set_ylabel('CAM Value')
-            axes[2, 0].grid(True, alpha=0.3)
-            
-            # IQR 계산 및 표시
-            iqr = q75_val - q25_val
-            axes[2, 0].text(0.02, 0.98, f'IQR: {iqr:.4f}', transform=axes[2, 0].transAxes, 
-                           verticalalignment='top', fontsize=12, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
-            
-            # 6. 종합 요약 (Comprehensive Summary)
-            summary_text = f"""CAM Analysis Summary:
-
-📊 Basic Stats:
-• Mean: {mean_val:.4f}
-• Std Dev: {std_val:.4f}
-• Range: {max_val-min_val:.4f}
-
-🎯 Activation:
-• High Act. Ratio: {high_activation_ratio:.1f}%
-• Total Pixels: {total_pixels:,}
-
-📈 Quality Scores:
-• Concentration: {concentration:.3f}
-• Uniformity: {uniformity:.3f}
-• Confidence: {confidence:.3f}
-
-📏 Distribution:
-• IQR: {iqr:.4f}
-• Q50/Q25: {q50_val/q25_val:.2f}"""
-            
-            axes[2, 1].text(0.05, 0.95, summary_text, transform=axes[2, 1].transAxes, 
-                           fontsize=14, verticalalignment='top',
-                           bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.8))
-            axes[2, 1].set_title('Comprehensive Summary', fontsize=16, fontweight='bold')
-            axes[2, 1].axis('off')
-            
-        except Exception as e:
-            # 오류 발생 시 간단한 메시지 표시
-            for ax in axes.flat:
-                ax.text(0.5, 0.5, 'CAM Statistics\nNot Available', 
-                       transform=ax.transAxes,
-                       horizontalalignment='center', verticalalignment='center',
-                       fontsize=16, fontweight='bold')
-                ax.set_title('CAM Statistics', fontsize=16, fontweight='bold')
-                ax.axis('off')
-        
-        plt.tight_layout()
-        return self.fig_to_base64(fig)
     
     def visualize_connected_components(self, components_analysis: Dict) -> str:
         """Connected Components 분석 결과 시각화"""
@@ -513,45 +143,70 @@ Average Size: {active_pixels/num_components if num_components > 0 else 0:.1f} pi
         plt.tight_layout()
         return self.fig_to_base64(fig)
     
-    def visualize_entropy_analysis(self, entropy_results: Dict) -> str:
-        """엔트로피 분석 결과 시각화"""
+    def visualize_entropy_analysis(self, entropy_results: Dict, cam_data: np.ndarray = None) -> str:
+        """엔트로피 분석 결과 시각화 - 실제 CAM 데이터 사용"""
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
         # 1. 활성화 분포 히스토그램 (Non-zero CAM values)
         if 'non_zero_count' in entropy_results and 'activation_ratio' in entropy_results:
-            # 히스토그램 데이터가 있는 경우 (예시 코드 참고)
             non_zero_count = entropy_results.get('non_zero_count', 0)
             total_count = entropy_results.get('total_count', 1)
             activation_ratio = entropy_results.get('activation_ratio', 0)
             histogram_entropy = entropy_results.get('histogram', 0)
             
-            # 가상의 히스토그램 데이터 생성 (실제로는 CAM 데이터가 필요)
-            # 여기서는 활성화 비율을 기반으로 한 시뮬레이션 데이터 사용
-            if non_zero_count > 0:
-                # 활성화 비율을 기반으로 한 분포 시뮬레이션
-                np.random.seed(42)  # 재현성을 위한 시드
-                simulated_values = np.random.beta(2, 5, size=min(non_zero_count, 1000))
-                simulated_values = simulated_values * (1 - activation_ratio) + activation_ratio
+            # 실제 CAM 데이터 사용
+            if cam_data is not None:
+                # 실제 CAM 데이터에서 non-zero 값들 추출
+                non_zero_cam = cam_data.flatten()[cam_data.flatten() > 0]
                 
-                axes[0, 0].hist(simulated_values, bins=50, alpha=0.7, color='purple', density=True, 
-                               edgecolor='black', linewidth=0.5)
-                axes[0, 0].set_title(f'Non-Zero CAM Distribution\nHistogram Entropy: {histogram_entropy:.3f}\nActivation Ratio: {activation_ratio:.3f}', 
-                                   fontsize=12, fontweight='bold')
-                axes[0, 0].set_xlabel('CAM Value (Non-Zero)')
-                axes[0, 0].set_ylabel('Density')
-                axes[0, 0].grid(True, alpha=0.3)
-                
-                # 활성화 비율 정보 추가
-                axes[0, 0].text(0.02, 0.98, f'Non-zero: {non_zero_count:,}\nTotal: {total_count:,}', 
-                                transform=axes[0, 0].transAxes, verticalalignment='top',
-                                bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
-                                fontsize=16, fontweight='bold')
+                if len(non_zero_cam) > 0:
+                    # 실제 데이터로 히스토그램 생성
+                    axes[0, 0].hist(non_zero_cam, bins=50, alpha=0.7, color='purple', density=True, 
+                                   edgecolor='black', linewidth=0.5)
+                    axes[0, 0].set_title(f'Non-Zero CAM Distribution\nHistogram Entropy: {histogram_entropy:.3f}\nActivation Ratio: {activation_ratio:.3f}', 
+                                       fontsize=12, fontweight='bold')
+                    axes[0, 0].set_xlabel('CAM Value (Non-Zero)')
+                    axes[0, 0].set_ylabel('Density')
+                    axes[0, 0].grid(True, alpha=0.3)
+                    
+                    # 실제 데이터 정보 추가
+                    axes[0, 0].text(0.02, 0.98, f'Non-zero: {len(non_zero_cam):,}\nTotal: {cam_data.size:,}\nMin: {non_zero_cam.min():.3f}\nMax: {non_zero_cam.max():.3f}', 
+                                    transform=axes[0, 0].transAxes, verticalalignment='top',
+                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                                    fontsize=12, fontweight='bold')
+                else:
+                    axes[0, 0].text(0.5, 0.5, 'No Non-Zero Values\nin CAM Data', 
+                                    transform=axes[0, 0].transAxes, ha='center', va='center',
+                                    bbox=dict(boxstyle='round,pad=0.5', facecolor='red', alpha=0.7),
+                                    fontsize=16, fontweight='bold')
+                    axes[0, 0].set_title('No Non-Zero Values', fontsize=16, fontweight='bold')
             else:
-                axes[0, 0].text(0.5, 0.5, 'No Activation\n(All values are 0)', 
-                                transform=axes[0, 0].transAxes, ha='center', va='center',
-                                bbox=dict(boxstyle='round,pad=0.5', facecolor='red', alpha=0.7),
-                                fontsize=16, fontweight='bold')
-                axes[0, 0].set_title('No Non-Zero Values', fontsize=16, fontweight='bold')
+                # CAM 데이터가 없는 경우 기존 방식 사용 (하지만 경고 표시)
+                if non_zero_count > 0:
+                    # 시뮬레이션 데이터 사용 (경고와 함께)
+                    np.random.seed(42)
+                    simulated_values = np.random.beta(2, 5, size=min(non_zero_count, 1000))
+                    simulated_values = simulated_values * (1 - activation_ratio) + activation_ratio
+                    
+                    axes[0, 0].hist(simulated_values, bins=50, alpha=0.7, color='purple', density=True, 
+                                   edgecolor='black', linewidth=0.5)
+                    axes[0, 0].set_title(f'Non-Zero CAM Distribution (SIMULATED)\nHistogram Entropy: {histogram_entropy:.3f}\nActivation Ratio: {activation_ratio:.3f}', 
+                                       fontsize=12, fontweight='bold')
+                    axes[0, 0].set_xlabel('CAM Value (Non-Zero)')
+                    axes[0, 0].set_ylabel('Density')
+                    axes[0, 0].grid(True, alpha=0.3)
+                    
+                    # 시뮬레이션 경고 추가
+                    axes[0, 0].text(0.02, 0.98, f'⚠️ SIMULATED DATA\nNon-zero: {non_zero_count:,}\nTotal: {total_count:,}', 
+                                    transform=axes[0, 0].transAxes, verticalalignment='top',
+                                    bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.7),
+                                    fontsize=12, fontweight='bold')
+                else:
+                    axes[0, 0].text(0.5, 0.5, 'No Activation\n(All values are 0)', 
+                                    transform=axes[0, 0].transAxes, ha='center', va='center',
+                                    bbox=dict(boxstyle='round,pad=0.5', facecolor='red', alpha=0.7),
+                                    fontsize=16, fontweight='bold')
+                    axes[0, 0].set_title('No Non-Zero Values', fontsize=16, fontweight='bold')
         else:
             # 기본 정보만 표시
             axes[0, 0].text(0.5, 0.5, 'Histogram data\nnot available', 
@@ -562,25 +217,45 @@ Average Size: {active_pixels/num_components if num_components > 0 else 0:.1f} pi
         
         # 2. 공간적 차이 히트맵 (Spatial Differences)
         if 'spatial' in entropy_results:
-            # 가상의 공간적 차이 데이터 생성 (실제로는 CAM의 gradient가 필요)
             spatial_entropy = entropy_results.get('spatial', 0)
             
-            # 20x20 크기의 가상 히트맵 생성
-            size = 20
-            np.random.seed(42)
-            # 공간적 패턴을 시뮬레이션
-            spatial_data = np.random.normal(0, 0.3, (size, size))
-            # 중앙에 활성화 패턴 추가
-            center_y, center_x = size//2, size//2
-            y, x = np.ogrid[:size, :size]
-            mask = (x - center_x)**2 + (y - center_y)**2 <= (size//4)**2
-            spatial_data[mask] += np.random.normal(0.5, 0.2, np.sum(mask))
-            
-            im = axes[0, 1].imshow(spatial_data, cmap='RdBu_r', aspect='auto')
-            axes[0, 1].set_title(f'Spatial Differences\nSpatial Entropy: {spatial_entropy:.3f}', 
+            # 실제 CAM 데이터 사용
+            if cam_data is not None:
+                # CAM 데이터의 gradient 계산
+                from scipy import ndimage
+                
+                # Sobel 필터를 사용한 gradient 계산
+                grad_x = ndimage.sobel(cam_data, axis=1)
+                grad_y = ndimage.sobel(cam_data, axis=0)
+                gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+                
+                # Gradient magnitude를 히트맵으로 표시
+                im = axes[0, 1].imshow(gradient_magnitude, cmap='RdBu_r', aspect='auto')
+                axes[0, 1].set_title(f'Spatial Differences (Gradient)\nSpatial Entropy: {spatial_entropy:.3f}', 
+                                   fontsize=12, fontweight='bold')
+                axes[0, 1].axis('off')
+                plt.colorbar(im, ax=axes[0, 1], fraction=0.046, pad=0.04)
+            else:
+                # CAM 데이터가 없는 경우 기존 시뮬레이션 사용 (경고와 함께)
+                size = 20
+                np.random.seed(42)
+                spatial_data = np.random.normal(0, 0.3, (size, size))
+                center_y, center_x = size//2, size//2
+                y, x = np.ogrid[:size, :size]
+                mask = (x - center_x)**2 + (y - center_y)**2 <= (size//4)**2
+                spatial_data[mask] += np.random.normal(0.5, 0.2, np.sum(mask))
+                
+                im = axes[0, 1].imshow(spatial_data, cmap='RdBu_r', aspect='auto')
+                axes[0, 1].set_title(f'Spatial Differences (SIMULATED)\nSpatial Entropy: {spatial_entropy:.3f}', 
+                                   fontsize=12, fontweight='bold')
+                axes[0, 1].axis('off')
+                plt.colorbar(im, ax=axes[0, 1], fraction=0.046, pad=0.04)
+                    
+                # 시뮬레이션 경고 추가
+                axes[0, 1].text(0.02, 0.98, '⚠️ SIMULATED DATA', 
+                               transform=axes[0, 1].transAxes, verticalalignment='top',
+                               bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.7),
                                fontsize=12, fontweight='bold')
-            axes[0, 1].axis('off')
-            plt.colorbar(im, ax=axes[0, 1], fraction=0.046, pad=0.04)
         else:
             axes[0, 1].text(0.5, 0.5, 'Spatial data\nnot available', 
                            transform=axes[0, 1].transAxes, ha='center', va='center',
@@ -615,18 +290,57 @@ Average Size: {active_pixels/num_components if num_components > 0 else 0:.1f} pi
             colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
             bar_colors = [colors[i % len(colors)] for i in range(len(directions))]
             
-            bars = axes[1, 1].bar(directions, direction_ents, color=bar_colors, alpha=0.8, 
-                                 edgecolor='black', linewidth=1)
-            axes[1, 1].set_title('Spatial Entropy by Direction', fontsize=12, fontweight='bold')
-            axes[1, 1].set_ylabel('Entropy')
-            axes[1, 1].grid(True, alpha=0.3)
-            axes[1, 1].set_facecolor('lightgreen')
+            # 0이 아닌 값들만 바 차트로 표시
+            non_zero_directions = []
+            non_zero_ents = []
+            non_zero_colors = []
             
-            # 값 표시
-            for bar, value in zip(bars, direction_ents):
-                height = bar.get_height()
-                axes[1, 1].text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                               f'{value:.3f}', ha='center', va='bottom', fontsize=16, fontweight='bold')
+            for i, (direction, value) in enumerate(zip(directions, direction_ents)):
+                if value > 0:
+                    non_zero_directions.append(direction)
+                    non_zero_ents.append(value)
+                    non_zero_colors.append(bar_colors[i])
+            
+            if non_zero_directions:
+                bars = axes[1, 1].bar(non_zero_directions, non_zero_ents, color=non_zero_colors, alpha=0.8, 
+                                     edgecolor='black', linewidth=1)
+                axes[1, 1].set_title('Spatial Entropy by Direction', fontsize=12, fontweight='bold')
+                axes[1, 1].set_ylabel('Entropy')
+                axes[1, 1].grid(True, alpha=0.3)
+                axes[1, 1].set_facecolor('lightgreen')
+                
+                # 값 표시 - 바 높이에 따라 위치 조정
+                for bar, value in zip(bars, non_zero_ents):
+                    height = bar.get_height()
+                    # 바가 너무 작으면 위에, 크면 안쪽에 표시
+                    if height < 0.01:
+                        text_y = height + 0.002
+                        va = 'bottom'
+                    else:
+                        text_y = height * 0.8
+                        va = 'center'
+                    
+                    axes[1, 1].text(bar.get_x() + bar.get_width()/2., text_y,
+                                   f'{value:.3f}', ha='center', va=va, fontsize=12, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
+                
+                # 0인 값들은 별도로 표시
+                zero_directions = [d for d, v in zip(directions, direction_ents) if v == 0]
+                if zero_directions:
+                    zero_text = f"Zero entropy: {', '.join(zero_directions)}"
+                    axes[1, 1].text(0.02, 0.98, zero_text, transform=axes[1, 1].transAxes,
+                                   fontsize=10, verticalalignment='top',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
+            else:
+                # 모든 값이 0인 경우
+                axes[1, 1].text(0.5, 0.5, 'All directions have\nzero entropy', 
+                               transform=axes[1, 1].transAxes, ha='center', va='center',
+                               fontsize=14, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
+                axes[1, 1].set_title('Spatial Entropy by Direction', fontsize=12, fontweight='bold')
+                axes[1, 1].set_ylabel('Entropy')
+                axes[1, 1].grid(True, alpha=0.3)
+                axes[1, 1].set_facecolor('lightgreen')
         else:
             # 엔트로피 요약 (기존)
             summary_text = f"""Entropy Summary:
@@ -837,204 +551,6 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
         plt.tight_layout()
         return self.fig_to_base64(fig)
     
-    def visualize_overlap_analysis(self, overlap_results: Dict, cam_result: Dict = None) -> str:
-        """
-        Overlap 분석 결과를 시각화
-        
-        Args:
-            overlap_results: overlap 분석 결과 딕셔너리
-            cam_result: CAM 분석 결과 (image_path, grayscale_cam 포함)
-            
-        Returns:
-            str: base64 인코딩된 이미지
-        """
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        
-        try:
-            # 원본 이미지 로드
-            original_img = None
-            if cam_result and cam_result.get('image_path'):
-                original_img = cv2.imread(cam_result['image_path'])
-                if original_img is not None:
-                    rgb_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
-                else:
-                    print(f"    ⚠️  Failed to load image: {cam_result['image_path']}")
-                    rgb_img = None
-            else:
-                print(f"    ⚠️  No image path provided in cam_result")
-                rgb_img = None
-            
-            # CAM 데이터 가져오기
-            grayscale_cam = None
-            if cam_result and cam_result.get('grayscale_cam') is not None:
-                grayscale_cam = cam_result['grayscale_cam']
-            elif hasattr(self, '_current_cam_data') and self._current_cam_data is not None:
-                grayscale_cam = self._current_cam_data
-            else:
-                print(f"    ⚠️  No CAM data available")
-            
-            # 1. 원본 이미지
-            if rgb_img is not None:
-                axes[0, 0].imshow(rgb_img)
-                axes[0, 0].set_title('Original Image', fontsize=14, fontweight='bold')
-            else:
-                axes[0, 0].text(0.5, 0.5, 'Original Image\nNot Available', 
-                               transform=axes[0, 0].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[0, 0].set_title('Original Image', fontsize=14, fontweight='bold')
-            axes[0, 0].axis('off')
-            
-            # 2. CAM 히트맵
-            if grayscale_cam is not None:
-                axes[0, 1].imshow(grayscale_cam, cmap='hot')
-                axes[0, 1].set_title('CAM Heatmap', fontsize=14, fontweight='bold')
-            else:
-                axes[0, 1].text(0.5, 0.5, 'CAM Heatmap\nNot Available', 
-                               transform=axes[0, 1].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[0, 1].set_title('CAM Heatmap', fontsize=14, fontweight='bold')
-            axes[0, 1].axis('off')
-            
-            # 3. 모든 bbox와 가장 큰 bbox 표시
-            if rgb_img is not None:
-                axes[0, 2].imshow(rgb_img)
-                
-                # bbox 정보가 있는 경우 표시
-                if 'all_bboxes' in overlap_results and 'largest_bbox_idx' in overlap_results:
-                    all_bboxes = overlap_results['all_bboxes']
-                    largest_bbox_idx = overlap_results['largest_bbox_idx']
-                    bbox_names = overlap_results.get('bbox_names', [f'Box_{i}' for i in range(len(all_bboxes))])
-                    
-                    # 색상 팔레트 생성
-                    colors = plt.cm.Set3(np.linspace(0, 1, len(all_bboxes)))
-                    
-                    for i, (box, color, name) in enumerate(zip(all_bboxes, colors, bbox_names)):
-                        x1, y1, x2, y2 = box
-                        
-                        if i == largest_bbox_idx:
-                            # 가장 큰 bbox는 굵은 빨간색 선으로 표시
-                            axes[0, 2].add_patch(plt.Rectangle((x1, y1), x2-x1, y2-y1, 
-                                                             fill=False, edgecolor='red', linewidth=4))
-                            axes[0, 2].text(x1, y1-5, f'LARGEST: {name}', 
-                                           color='red', fontsize=10, fontweight='bold',
-                                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
-                        else:
-                            # 다른 bbox는 얇은 선으로 표시
-                            axes[0, 2].add_patch(plt.Rectangle((x1, y1), x2-x1, y2-y1, 
-                                                             fill=False, edgecolor=color, linewidth=2, alpha=0.7))
-                            axes[0, 2].text(x1, y1-5, name, color=color, fontsize=8,
-                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7))
-                    
-                    axes[0, 2].set_title('All Detections (Red = Largest)', fontsize=14, fontweight='bold')
-                else:
-                    # bbox 정보가 없는 경우 기본 메시지
-                    axes[0, 2].text(0.5, 0.5, 'BBox Information\nNot Available', 
-                                   transform=axes[0, 2].transAxes,
-                                   horizontalalignment='center', verticalalignment='center',
-                                   fontsize=16, fontweight='bold',
-                                   bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                    axes[0, 2].set_title('All Detections', fontsize=14, fontweight='bold')
-            else:
-                axes[0, 2].text(0.5, 0.5, 'Image Not Available\nfor BBox Display', 
-                               transform=axes[0, 2].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[0, 2].set_title('All Detections', fontsize=14, fontweight='bold')
-            axes[0, 2].axis('off')
-            
-            # 4. CAM 활성 영역
-            if 'cam_active_mask' in overlap_results:
-                cam_active_mask = overlap_results['cam_active_mask']
-                axes[1, 0].imshow(cam_active_mask, cmap='gray')
-                cam_active_area = overlap_results.get('cam_active_area', 0)
-                
-                # 임계값 정보 추가 (임계값 없이 모든 활성화 값 사용)
-                threshold_info = overlap_results.get('threshold_info', {})
-                threshold = threshold_info.get('threshold', 0.0)
-                method = threshold_info.get('method', 'no_threshold')
-                
-                title_text = f'CAM Active Region\n({cam_active_area:,} pixels)\nAll Activations (>0)'
-                axes[1, 0].set_title(title_text, fontsize=14, fontweight='bold')
-                
-                # 임계값 설명 추가
-                explanation_text = f'White: > 0.0\nBlack: = 0.0\nMethod: {method}'
-                axes[1, 0].text(0.02, 0.98, explanation_text, transform=axes[1, 0].transAxes, 
-                               verticalalignment='top', fontsize=10, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-            else:
-                axes[1, 0].text(0.5, 0.5, 'CAM Active Mask\nNot Available', 
-                               transform=axes[1, 0].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[1, 0].set_title('CAM Active Region', fontsize=14, fontweight='bold')
-            axes[1, 0].axis('off')
-            
-            # 5. 가장 큰 bbox 마스크
-            if 'bbox_mask' in overlap_results:
-                bbox_mask = overlap_results['bbox_mask']
-                axes[1, 1].imshow(bbox_mask, cmap='gray')
-                bbox_area = overlap_results.get('bbox_area', 0)
-                axes[1, 1].set_title(f'Largest Bbox Region\n({bbox_area:,} pixels)', 
-                                   fontsize=14, fontweight='bold')
-            else:
-                axes[1, 1].text(0.5, 0.5, 'BBox Mask\nNot Available', 
-                               transform=axes[1, 1].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[1, 1].set_title('Largest Bbox Region', fontsize=14, fontweight='bold')
-            axes[1, 1].axis('off')
-            
-            # 6. Overlap 시각화
-            if all(key in overlap_results for key in ['bbox_mask', 'cam_active_mask', 'intersection_mask']):
-                # Overlap 시각화 생성
-                overlap_vis = np.zeros((*overlap_results['bbox_mask'].shape, 3))
-                overlap_vis[overlap_results['bbox_mask']] = [1, 0, 0]  # 빨간색: bbox
-                overlap_vis[overlap_results['cam_active_mask']] = [0, 1, 0]  # 초록색: CAM
-                overlap_vis[overlap_results['intersection_mask']] = [1, 1, 0]  # 노란색: 교집합
-                
-                axes[1, 2].imshow(overlap_vis)
-                iou_score = overlap_results.get('iou', 0)
-                axes[1, 2].set_title(f'Overlap Visualization\nIoU: {iou_score:.4f}', 
-                                   fontsize=14, fontweight='bold')
-                
-                # 범례 추가
-                legend_elements = [
-                    plt.Rectangle((0, 0), 1, 1, facecolor='red', alpha=0.7, label='Largest Bbox'),
-                    plt.Rectangle((0, 0), 1, 1, facecolor='green', alpha=0.7, label='CAM Active'),
-                    plt.Rectangle((0, 0), 1, 1, facecolor='yellow', alpha=0.7, label='Intersection')
-                ]
-                axes[1, 2].legend(handles=legend_elements, loc='upper right', fontsize=10)
-            else:
-                axes[1, 2].text(0.5, 0.5, 'Overlap Visualization\nNot Available', 
-                               transform=axes[1, 2].transAxes,
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=16, fontweight='bold',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
-                axes[1, 2].set_title('Overlap Visualization', fontsize=14, fontweight='bold')
-            axes[1, 2].axis('off')
-            
-        except Exception as e:
-            print(f"    ❌ Error in overlap visualization: {e}")
-            # 오류 발생 시 모든 subplot에 오류 메시지 표시
-            for ax in axes.flat:
-                ax.text(0.5, 0.5, 'Visualization Error', 
-                       transform=ax.transAxes,
-                       horizontalalignment='center', verticalalignment='center',
-                       fontsize=16, fontweight='bold',
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='red', alpha=0.7))
-                ax.set_title('Error', fontsize=14, fontweight='bold')
-                ax.axis('off')
-        
-        plt.tight_layout()
-        return self.fig_to_base64(fig)
-    
 
     
     def create_comprehensive_visualization(self, comprehensive_result: Dict) -> Dict[str, str]:
@@ -1108,9 +624,12 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                 except Exception as e:
                     print(f"    ⚠️  Failed to generate CAM threshold analysis: {e}")
             
-            # 3. CAM 통계 시각화 (기존)
+            # 3. CAM 통계 시각화 (실제 CAM 데이터 사용)
             if comprehensive_result.get('cam_stats'):
-                visualizations['cam_statistics'] = self.visualize_cam_statistics(comprehensive_result['cam_stats'])
+                visualizations['cam_statistics'] = self.visualize_cam_statistics(
+                    comprehensive_result['cam_stats'],
+                    cam_data=grayscale_cam  # 실제 CAM 데이터 전달
+                )
             
             # 5. Connected Components 시각화
             if comprehensive_result.get('components_analysis'):
@@ -1121,7 +640,8 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             # 6. 엔트로피 분석 시각화
             if comprehensive_result.get('entropy_results'):
                 visualizations['entropy_analysis'] = self.visualize_entropy_analysis(
-                    comprehensive_result['entropy_results']
+                    comprehensive_result['entropy_results'], 
+                    cam_data=grayscale_cam  # 실제 CAM 데이터 전달
                 )
             
             # 7. Centroid 분석 시각화
@@ -1311,44 +831,11 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
         else:
             return cam_filtered
 
-    def visualize_cam_statistics(self, cam_stats: Dict) -> str:
-        """CAM 통계 정보 시각화 - 개선된 버전"""
+    def visualize_cam_statistics(self, cam_stats: Dict, cam_data: np.ndarray = None) -> str:
+        """CAM 통계 정보 시각화 - Percentile과 Skewness 분석 포함 (실제 CAM 데이터 사용)"""
         fig, axes = plt.subplots(3, 2, figsize=(12, 18))
         
-        # 데이터 구조 확인 및 안전한 접근
-        def safe_get_stat(stat_name, default_value=0):
-            """안전하게 통계값을 가져오는 헬퍼 함수"""
-            try:
-                if stat_name in cam_stats:
-                    stat_data = cam_stats[stat_name]
-                    print(f"    🔍 Accessing {stat_name}: {type(stat_data)} - {stat_data}")
-                    
-                    if isinstance(stat_data, (list, tuple)) and len(stat_data) >= 2:
-                        result = stat_data[1]  # 값 부분
-                        print(f"    ✅ Extracted value: {result}")
-                        return result
-                    elif isinstance(stat_data, (int, float)):
-                        print(f"    ✅ Direct value: {stat_data}")
-                        return stat_data
-                    elif isinstance(stat_data, str):
-                        print(f"    ⚠️  String value, using default: {stat_data}")
-                        return default_value
-                    else:
-                        print(f"    ⚠️  Unknown type, using default: {type(stat_data)}")
-                        return default_value
-                else:
-                    print(f"    ⚠️  Key {stat_name} not found in cam_stats")
-                    return default_value
-            except (IndexError, TypeError, KeyError) as e:
-                print(f"    ❌ Error accessing {stat_name}: {e}")
-                return default_value
-        
-
-        
         try:
-            # 디버깅: CAM stats 구조 확인
-            # print(f"    🔍 CAM Statistics - CAM stats keys: {list(cam_stats.keys()) if cam_stats else 'None'}")
-            
             # CAM stats에서 직접 값 추출 (튜플 구조 처리)
             def extract_stat_value(stat_name, default_value=0):
                 """CAM stats에서 값을 추출하는 헬퍼 함수"""
@@ -1370,22 +857,13 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             max_val = extract_stat_value('max', 0)
             min_val = extract_stat_value('min', 0)
             std_val = extract_stat_value('std', 0)
+            high_activation_ratio = extract_stat_value('high_activation_ratio', 15.0)
+            total_pixels = extract_stat_value('total_pixels', 50176)  # 224x224 기본값
+            
+            # 1. CAM Value Distribution (Boxplot)
             q25_val = extract_stat_value('q25', 0)
             q50_val = extract_stat_value('q50', 0)
             q75_val = extract_stat_value('q75', 0)
-            high_activation_ratio = extract_stat_value('high_activation_ratio', 15.0)
-            threshold_90 = extract_stat_value('threshold_90', 0.5)
-            total_pixels = extract_stat_value('total_pixels', 50176)  # 224x224 기본값
-            
-            # CAM 데이터 시뮬레이션 (실제 통계값 사용)
-            np.random.seed(42)  # 재현성을 위한 시드
-            shape = extract_stat_value('shape', (224, 224))
-            if isinstance(shape, tuple) and len(shape) >= 2:
-                total_pixels = shape[0] * shape[1]
-            
-            # 실제 통계값을 기반으로 CAM 데이터 시뮬레이션
-            cam_values = np.random.normal(mean_val, std_val, total_pixels)
-            cam_values = np.clip(cam_values, min_val, max_val)
             
             # 박스플롯 데이터 준비
             box_data = [min_val, q25_val, q50_val, q75_val, max_val]
@@ -1401,44 +879,152 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                            verticalalignment='top', fontsize=12, fontweight='bold',
                            bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
             
-            # 2. 활성화 강도 분석 (메타데이터 기반)
-            # 이미 위에서 추출한 값 사용
-            total_pixels = 50176  # 224x224 기본값
-            
-            axes[0, 1].hist(cam_values, bins=50, alpha=0.7, color='green', density=True, 
-                           edgecolor='black', linewidth=0.5)
-            axes[0, 1].set_title('CAM Value Histogram', fontsize=16, fontweight='bold')
-            axes[0, 1].set_xlabel('CAM Value')
-            axes[0, 1].set_ylabel('Density')
-            axes[0, 1].grid(True, alpha=0.3)
-            
-            # 활성화 정보 추가
-            activation_info = f'High Activation: {high_activation_ratio:.1f}%\nTotal Pixels: {total_pixels:,}'
-            axes[0, 1].text(0.02, 0.98, activation_info, transform=axes[0, 1].transAxes, 
-                           verticalalignment='top', fontsize=12, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
+            # 2. Percentile Analysis (기존 Quartile Analysis 대체)
+            percentiles = cam_stats.get('percentiles', {})
+            if percentiles:
+                percentile_names = list(percentiles.keys())
+                percentile_values = list(percentiles.values())
+                
+                bars = axes[0, 1].bar(percentile_names, percentile_values, 
+                                     color=['lightblue', 'skyblue', 'blue', 'navy', 'purple', 
+                                            'darkred', 'red', 'orange', 'yellow'], alpha=0.7)
+                axes[0, 1].set_title('CAM Activation Percentiles', fontsize=16, fontweight='bold')
+                axes[0, 1].set_ylabel('Activation Value')
+                axes[0, 1].tick_params(axis='x', rotation=45)
+                axes[0, 1].grid(True, alpha=0.3)
+                
+                # 값 표시 - 바 높이에 따라 위치 조정
+                for bar, value in zip(bars, percentile_values):
+                    height = bar.get_height()
+                    # 바가 너무 작으면 위에, 크면 안쪽에 표시
+                    if height < 0.01:
+                        text_y = height + 0.001
+                        va = 'bottom'
+                        fontsize = 8
+                    else:
+                        text_y = height * 0.8
+                        va = 'center'
+                        fontsize = 10
+                    
+                    axes[0, 1].text(bar.get_x() + bar.get_width()/2., text_y,
+                                   f'{value:.3f}', ha='center', va=va, fontsize=fontsize, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.1', facecolor='white', alpha=0.8))
+                
+                # 해석 정보 추가
+                interpretation = cam_stats.get('percentile_interpretation', {})
+                if interpretation.get('high_concentration'):
+                    concentration_text = 'High Concentration'
+                    color = 'red'
+                elif interpretation.get('moderate_concentration'):
+                    concentration_text = 'Moderate Concentration'
+                    color = 'orange'
+                else:
+                    concentration_text = 'Low Concentration'
+                    color = 'green'
+                
+                axes[0, 1].text(0.02, 0.98, concentration_text, transform=axes[0, 1].transAxes, 
+                               verticalalignment='top', fontsize=12, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.3', facecolor=color, alpha=0.7))
+            else:
+                axes[0, 1].text(0.5, 0.5, 'Percentile Analysis\nNot Available', 
+                               transform=axes[0, 1].transAxes,
+                               horizontalalignment='center', verticalalignment='center',
+                               fontsize=16, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
+                axes[0, 1].set_title('CAM Activation Percentiles', fontsize=16, fontweight='bold')
             
             # 3. 임계값별 활성화 분석
             thresholds = np.linspace(0, max_val, 20)
             activation_ratios = []
             
-            for threshold in thresholds:
-                if threshold == 0:
-                    activation_ratios.append(100.0)
-                else:
-                    # 임계값 이상의 활성화 비율 계산 (시뮬레이션)
-                    ratio = np.sum(cam_values >= threshold) / len(cam_values) * 100
-                    activation_ratios.append(ratio)
+            # 실제 CAM 데이터 사용
+            if cam_data is not None:
+                cam_values = cam_data.flatten()
+                for threshold in thresholds:
+                    if threshold == 0:
+                        activation_ratios.append(100.0)
+                    else:
+                        # 실제 데이터로 활성화 비율 계산
+                        ratio = np.sum(cam_values >= threshold) / len(cam_values) * 100
+                        activation_ratios.append(ratio)
+            else:
+                # CAM 데이터가 없는 경우 시뮬레이션 사용 (경고와 함께)
+                for threshold in thresholds:
+                    if threshold == 0:
+                        activation_ratios.append(100.0)
+                    else:
+                        # 임계값 이상의 활성화 비율 계산 (시뮬레이션)
+                        ratio = np.sum(np.random.normal(mean_val, std_val, total_pixels) >= threshold) / total_pixels * 100
+                        activation_ratios.append(ratio)
             
             axes[1, 0].plot(thresholds, activation_ratios, 'o-', linewidth=2, markersize=4, 
                            color='red', markerfacecolor='orange')
-            axes[1, 0].set_title('Activation Ratio vs Threshold', fontsize=16, fontweight='bold')
+            
+            # 제목에 실제 데이터 사용 여부 표시
+            if cam_data is not None:
+                title = 'Activation Ratio vs Threshold (Real Data)'
+            else:
+                title = 'Activation Ratio vs Threshold (Simulated)'
+            
+            axes[1, 0].set_title(title, fontsize=16, fontweight='bold')
             axes[1, 0].set_xlabel('Threshold')
             axes[1, 0].set_ylabel('Activation Ratio (%)')
             axes[1, 0].grid(True, alpha=0.3)
             axes[1, 0].set_ylim(0, 105)
             
-            # 4. 품질 지표 (Quality Metrics)
+            # 시뮬레이션 사용 시 경고 추가
+            if cam_data is None:
+                axes[1, 0].text(0.02, 0.98, '⚠️ SIMULATED DATA', 
+                               transform=axes[1, 0].transAxes, verticalalignment='top',
+                               bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.7),
+                               fontsize=12, fontweight='bold')
+            
+            # 4. Skewness Analysis (기존 CAM Value Histogram 대체)
+            skewness = cam_stats.get('skewness', 0)
+            percentile_skewness = cam_stats.get('percentile_skewness', 0)
+            skewness_type = cam_stats.get('skewness_type', 'unknown')
+            distribution_type = cam_stats.get('distribution_type', 'unknown')
+            
+            if skewness_type != 'unknown':
+                # Skewness 값 비교
+                skewness_types = ['Standard Skewness', 'Percentile Skewness']
+                skewness_values = [skewness, percentile_skewness]
+                colors = ['lightcoral', 'lightblue']
+                
+                bars = axes[1, 1].bar(skewness_types, skewness_values, color=colors, alpha=0.7)
+                axes[1, 1].set_title('Skewness Analysis', fontsize=16, fontweight='bold')
+                axes[1, 1].set_ylabel('Skewness Value')
+                axes[1, 1].grid(True, alpha=0.3)
+                
+                # 값 표시 - 바 높이에 따라 위치 조정
+                for bar, value in zip(bars, skewness_values):
+                    height = bar.get_height()
+                    # 바가 너무 작으면 위에, 크면 안쪽에 표시
+                    if height < 0.1:
+                        text_y = height + 0.01
+                        va = 'bottom'
+                    else:
+                        text_y = height * 0.8
+                        va = 'center'
+                    
+                    axes[1, 1].text(bar.get_x() + bar.get_width()/2., text_y,
+                                   f'{value:.3f}', ha='center', va=va, fontsize=12, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
+                
+                # 분포 타입 정보 추가 - 위치 조정
+                type_text = f'Type: {skewness_type.replace("_", " ").title()}'
+                axes[1, 1].text(0.02, 0.95, type_text, transform=axes[1, 1].transAxes, 
+                               verticalalignment='top', fontsize=12, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
+            else:
+                axes[1, 1].text(0.5, 0.5, 'Skewness Analysis\nNot Available', 
+                               transform=axes[1, 1].transAxes,
+                               horizontalalignment='center', verticalalignment='center',
+                               fontsize=16, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
+                axes[1, 1].set_title('Skewness Analysis', fontsize=16, fontweight='bold')
+            
+            # 5. 품질 지표 (Quality Metrics)
             # 집중도 (Concentration) - 높은 값일수록 활성화가 집중됨
             concentration = (max_val - mean_val) / (max_val - min_val) if max_val != min_val else 0
             
@@ -1452,34 +1038,30 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             quality_values = [concentration, uniformity, confidence]
             colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
             
-            bars = axes[1, 1].bar(quality_metrics, quality_values, color=colors, alpha=0.8)
-            axes[1, 1].set_title('Quality Metrics', fontsize=16, fontweight='bold')
-            axes[1, 1].set_ylabel('Score')
-            axes[1, 1].set_ylim(0, 1)
-            axes[1, 1].grid(True, alpha=0.3)
-            
-            # 값 표시
-            for bar, value in zip(bars, quality_values):
-                height = bar.get_height()
-                axes[1, 1].text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                               f'{value:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
-            
-            # 5. 사분위수 비교 (Quartile Comparison)
-            quartile_data = [q25_val, q50_val, q75_val]
-            quartile_labels = ['Q25', 'Q50\n(Median)', 'Q75']
-            
-            axes[2, 0].bar(quartile_labels, quartile_data, color=['lightcoral', 'coral', 'darkred'], alpha=0.8)
-            axes[2, 0].set_title('Quartile Analysis', fontsize=16, fontweight='bold')
-            axes[2, 0].set_ylabel('CAM Value')
+            bars = axes[2, 0].bar(quality_metrics, quality_values, color=colors, alpha=0.8)
+            axes[2, 0].set_title('Quality Metrics', fontsize=16, fontweight='bold')
+            axes[2, 0].set_ylabel('Score')
+            axes[2, 0].set_ylim(0, 1)
             axes[2, 0].grid(True, alpha=0.3)
             
-            # IQR 계산 및 표시
-            iqr = q75_val - q25_val
-            axes[2, 0].text(0.02, 0.98, f'IQR: {iqr:.4f}', transform=axes[2, 0].transAxes, 
-                           verticalalignment='top', fontsize=12, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
+            # 값 표시 - 바 높이에 따라 위치 조정
+            for bar, value in zip(bars, quality_values):
+                height = bar.get_height()
+                # 바가 너무 작으면 위에, 크면 안쪽에 표시
+                if height < 0.1:
+                    text_y = height + 0.02
+                    va = 'bottom'
+                else:
+                    text_y = height * 0.8
+                    va = 'center'
+                
+                axes[2, 0].text(bar.get_x() + bar.get_width()/2., text_y,
+                               f'{value:.3f}', ha='center', va=va, fontsize=12, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
             
             # 6. 종합 요약 (Comprehensive Summary)
+            iqr = q75_val - q25_val
+            
             summary_text = f"""CAM Analysis Summary:
 
 📊 Basic Stats:
@@ -1589,11 +1171,20 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                 axes[0, 1].set_ylim(0, 1)
                 axes[0, 1].grid(True, alpha=0.3)
                 
-                # 값 표시
+                # 값 표시 - 바 높이에 따라 위치 조정
                 for bar, value in zip(bars, coverage_metrics):
                     height = bar.get_height()
-                    axes[0, 1].text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                                   f'{value:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
+                    # 바가 너무 작으면 위에, 크면 안쪽에 표시
+                    if height < 0.1:
+                        text_y = height + 0.02
+                        va = 'bottom'
+                    else:
+                        text_y = height * 0.8
+                        va = 'center'
+                    
+                    axes[0, 1].text(bar.get_x() + bar.get_width()/2., text_y,
+                                   f'{value:.3f}', ha='center', va=va, fontsize=12, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
             else:
                 axes[0, 1].text(0.5, 0.5, 'Coverage Metrics\nNot Available', 
                                transform=axes[0, 1].transAxes,
@@ -1882,6 +1473,3 @@ BBox Index: {overlap_results.get('largest_bbox_idx', 'N/A')}"""
         
         plt.tight_layout()
         return self.fig_to_base64(fig)
-    
-
- 

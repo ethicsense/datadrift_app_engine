@@ -346,8 +346,9 @@ class XAIAnalyzer:
             cam: CAM 데이터 (2D numpy array)
             
         Returns:
-            Dict: CAM 통계 정보
+            Dict: CAM 통계 정보 (기본 통계 + Percentile + Skewness)
         """
+        # 기본 통계
         cam_stats = {
             'mean': ('평균', np.mean(cam)),
             'max': ('최대값', np.max(cam)),
@@ -361,7 +362,143 @@ class XAIAnalyzer:
             'total_pixels': ('총 픽셀 수', cam.size)
         }
         
-        # 사분위수 정보
+        # 0보다 큰 값만 사용 (활성화된 영역)
+        non_zero_cam = cam[cam > 0]
+        
+        # Percentile 분석
+        if len(non_zero_cam) > 0:
+            # 다양한 백분위수 계산
+            percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+            percentile_values = {f'P{p}': np.percentile(non_zero_cam, p) for p in percentiles}
+            
+            # 의미있는 비율 계산
+            ratios = {
+                'P95_P5_ratio': percentile_values['P95'] / percentile_values['P5'],  # 극값 비율
+                'P90_P10_ratio': percentile_values['P90'] / percentile_values['P10'],  # 상위/하위 10% 비율
+                'P99_P50_ratio': percentile_values['P99'] / percentile_values['P50'],  # 극값/중앙값 비율
+                'P75_P25_ratio': percentile_values['P75'] / percentile_values['P25'],  # IQR 비율
+            }
+            
+            # Percentile 해석 정보
+            percentile_interpretation = {
+                'high_concentration': ratios['P95_P5_ratio'] > 10,  # 극도로 집중
+                'moderate_concentration': 5 < ratios['P95_P5_ratio'] <= 10,  # 적당히 집중
+                'low_concentration': ratios['P95_P5_ratio'] <= 5,  # 분산됨
+                'no_activation': False
+            }
+            
+            # Percentile 정보를 cam_stats에 추가
+            cam_stats.update({
+                'percentiles': percentile_values,
+                'percentile_ratios': ratios,
+                'percentile_interpretation': percentile_interpretation,
+                'total_activated_pixels': len(non_zero_cam),
+                'activation_ratio': len(non_zero_cam) / cam.size * 100
+            })
+            
+            # Skewness 분석
+            if len(non_zero_cam) >= 3:
+                mean_val = np.mean(non_zero_cam)
+                std_val = np.std(non_zero_cam)
+                
+                # 표준 Skewness 계산
+                if std_val > 0:
+                    skewness = np.mean(((non_zero_cam - mean_val) / std_val) ** 3)
+                else:
+                    skewness = 0.0
+                
+                # Percentile 기반 Skewness (Bowley's coefficient)
+                p10, p50, p90 = np.percentile(non_zero_cam, [10, 50, 90])
+                if p90 - p10 > 0:
+                    percentile_skewness = (p90 + p10 - 2*p50) / (p90 - p10)
+                else:
+                    percentile_skewness = 0.0
+                
+                # Skewness 타입 분류
+                if abs(skewness) < 0.5:
+                    skewness_type = 'symmetric'
+                    distribution_type = '정규분포에 가까움'
+                elif skewness > 0.5:
+                    skewness_type = 'right_skewed'
+                    distribution_type = '오른쪽으로 치우침 (높은 활성화 값이 많음)'
+                else:
+                    skewness_type = 'left_skewed'
+                    distribution_type = '왼쪽으로 치우침 (낮은 활성화 값이 많음)'
+                
+                # Skewness 해석 정보
+                skewness_interpretation = {
+                    'concentration_level': 'high' if abs(skewness) > 1.0 else 'moderate' if abs(skewness) > 0.5 else 'low',
+                    'activation_pattern': 'focused' if skewness > 0.5 else 'distributed' if skewness < -0.5 else 'balanced',
+                    'model_behavior': 'selective' if skewness > 1.0 else 'general' if skewness < -0.5 else 'balanced'
+                }
+                
+                # Skewness 정보를 cam_stats에 추가
+                cam_stats.update({
+                    'skewness': float(skewness),
+                    'percentile_skewness': float(percentile_skewness),
+                    'skewness_type': skewness_type,
+                    'distribution_type': distribution_type,
+                    'skewness_interpretation': skewness_interpretation,
+                    'skewness_stats': {
+                        'mean': float(mean_val),
+                        'median': float(p50),
+                        'std': float(std_val),
+                        'p10': float(p10),
+                        'p90': float(p90)
+                    }
+                })
+            else:
+                # 데이터 부족 시 기본값
+                cam_stats.update({
+                    'skewness': 0.0,
+                    'percentile_skewness': 0.0,
+                    'skewness_type': 'insufficient_data',
+                    'distribution_type': '데이터 부족으로 분석 불가',
+                    'skewness_interpretation': {
+                        'concentration_level': 'unknown',
+                        'activation_pattern': 'unknown',
+                        'model_behavior': 'unknown'
+                    },
+                    'skewness_stats': {
+                        'mean': 0.0,
+                        'median': 0.0,
+                        'std': 0.0,
+                        'p10': 0.0,
+                        'p90': 0.0
+                    }
+                })
+        else:
+            # 활성화된 픽셀이 없는 경우
+            cam_stats.update({
+                'percentiles': {},
+                'percentile_ratios': {},
+                'percentile_interpretation': {
+                    'high_concentration': False,
+                    'moderate_concentration': False,
+                    'low_concentration': True,
+                    'no_activation': True
+                },
+                'total_activated_pixels': 0,
+                'activation_ratio': 0.0,
+                'skewness': 0.0,
+                'percentile_skewness': 0.0,
+                'skewness_type': 'no_activation',
+                'distribution_type': '활성화 없음',
+                'skewness_interpretation': {
+                    'concentration_level': 'none',
+                    'activation_pattern': 'none',
+                    'model_behavior': 'none'
+                },
+                'skewness_stats': {
+                    'mean': 0.0,
+                    'median': 0.0,
+                    'std': 0.0,
+                    'p10': 0.0,
+                    'p90': 0.0
+                }
+            })
+        
+        # 기존 사분위수 정보 (하위 호환성을 위해 유지)
         q25, q50, q75 = np.percentile(cam, [25, 50, 75])
         cam_stats.update({
             'q25': ('1사분위수', q25),
@@ -380,6 +517,8 @@ class XAIAnalyzer:
         })
         
         return cam_stats
+    
+
     
     def adaptive_thresholding(self, cam: np.ndarray, percentile: int = 85) -> np.ndarray:
         """
@@ -676,19 +815,34 @@ class XAIAnalyzer:
             shannon_ent = shannon_entropy(cam_discrete)
             entropy_results['shannon'] = shannon_ent
         
-        # 2. 공간적 엔트로피
+        # 2. 공간적 엔트로피 (그래디언트 방식)
         if 'spatial' in methods:
-            h_diff = np.diff(cam, axis=1)
-            v_diff = np.diff(cam, axis=0)
-            d_diff = np.diff(np.diff(cam, axis=0), axis=1)
+            # 그래디언트 계산 (중앙 차분 방식)
+            gx = np.zeros_like(cam)
+            gy = np.zeros_like(cam)
             
-            h_ent = shannon_entropy((h_diff * 255).astype(np.uint8))
-            v_ent = shannon_entropy((v_diff * 255).astype(np.uint8))
-            d_ent = shannon_entropy((d_diff * 255).astype(np.uint8))
+            # 수평 그래디언트 (Gx) - 중앙 차분
+            gx[:, 1:-1] = (cam[:, 2:] - cam[:, :-2]) / 2.0
             
-            spatial_ent = (h_ent + v_ent + d_ent) / 3
+            # 수직 그래디언트 (Gy) - 중앙 차분
+            gy[1:-1, :] = (cam[2:, :] - cam[:-2, :]) / 2.0
+            
+            # 그래디언트 크기 (magnitude)
+            gradient_magnitude = np.sqrt(gx**2 + gy**2)
+            
+            # 각 방향별 엔트로피 계산
+            gx_ent = shannon_entropy((gx * 255).astype(np.uint8))
+            gy_ent = shannon_entropy((gy * 255).astype(np.uint8))
+            magnitude_ent = shannon_entropy((gradient_magnitude * 255).astype(np.uint8))
+            
+            # 평균 공간 엔트로피 (그래디언트 크기에 더 높은 가중치)
+            spatial_ent = 0.4 * gx_ent + 0.4 * gy_ent + 0.2 * magnitude_ent
             entropy_results['spatial'] = spatial_ent
-            entropy_results['spatial_directions'] = {'horizontal': h_ent, 'vertical': v_ent, 'diagonal': d_ent}
+            entropy_results['spatial_directions'] = {
+                'horizontal': gx_ent, 
+                'vertical': gy_ent, 
+                'magnitude': magnitude_ent
+            }
         
         # 3. 히스토그램 엔트로피
         if 'histogram' in methods:
@@ -866,7 +1020,7 @@ class XAIAnalyzer:
         
         grayscale_cam = cam_result['grayscale_cam']
         
-        # 1. 기본 통계
+        # 1. 기본 통계 (Percentile과 Skewness 분석 포함)
         cam_stats = self.calculate_cam_statistics(grayscale_cam)
         
         # 2. Adaptive 쓰레스홀딩
@@ -919,22 +1073,6 @@ class XAIAnalyzer:
             'target_layers': [str(layer) for layer in target_layers] if target_layers else [],
             'target_layer_index': self.target_layer_index,  # 저장된 타겟 레이어 인덱스
             'cam_stats': cam_stats,
-            # CAM 메타데이터도 저장 (용량 최적화)
-            'cam_metadata': {
-                'shape': grayscale_cam.shape,
-                'min': float(grayscale_cam.min()),
-                'max': float(grayscale_cam.max()),
-                'mean': float(grayscale_cam.mean()),
-                'std': float(grayscale_cam.std()),
-                'percentiles': {
-                    '25': float(np.percentile(grayscale_cam, 25)),
-                    '50': float(np.percentile(grayscale_cam, 50)),
-                    '75': float(np.percentile(grayscale_cam, 75)),
-                    '85': float(np.percentile(grayscale_cam, 85)),
-                    '90': float(np.percentile(grayscale_cam, 90)),
-                    '95': float(np.percentile(grayscale_cam, 95))
-                }
-            },
             'adaptive_thresholding': {
                 'percentile': 85,
                 'threshold': float(np.percentile(grayscale_cam, 85)),
