@@ -9,6 +9,7 @@ README_PYPI.md
 # ignore DB, temporal data & log files
 flask_webapp/db/
 flask_webapp/static/cam_results/
+flask_webapp/static/perturbation_results/
 *.pcd
 *.zip
 

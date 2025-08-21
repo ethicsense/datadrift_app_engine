@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perturbation Visualization Upload</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .form-container { padding: 20px; }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+        }
+        .settings-row { display: none; }
+        .btn-brown {
+            background-color: #FF6B00;
+            border-color: #FF6B00;
+            color: white;
+        }
+        .btn-brown:hover {
+            background-color: #FF8C00;
+            border-color: #FF8C00;
+            color: white;
+        }
+        .btn-brown:focus {
+            background-color: #FF6B00;
+            border-color: #FF6B00;
+            color: white;
+            box-shadow: 0 0 0 0.25rem rgba(255, 107, 0, 0.25);
+        }
+        .project-card {
+            border: 2px solid transparent;
+            transition: border-color 0.3s ease, transform 0.2s, box-shadow 0.2s;
+        }
+        .project-card.selected {
+            border-color: #198754;
+            box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+        }
+        .help-icon {
+            color: #6c757d;
+            cursor: help;
+            margin-left: 5px;
+            font-size: 14px;
+        }
+        .help-icon:hover {
+            color: #495057;
+        }
+        .section-description {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+        .input-group-text {
+            background-color: #e9ecef;
+            border-color: #ced4da;
+        }
+        .help-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+            font-style: italic;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .custom-arrow {
+            stroke-width: 4;
+            stroke: currentColor;
+            fill: none;
+        }
+        .perturbation-type-card {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .perturbation-type-card:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .perturbation-type-card.selected {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+        }
+        .perturbation-type-card h6 {
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        .perturbation-type-card small {
+            color: #6c757d;
+        }
+        .image-masking-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+        }
+        .image-display-area {
+            position: relative;
+            display: inline-block;
+        }
+        .canvas-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+        .masking-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .masking-controls .btn {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        #imageCanvas {
+            max-width: 100%;
+            height: auto;
+            background-color: #f8f9fa;
+        }
+        .masking-options-container {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .masking-option-card {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: white;
+            min-width: 180px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .masking-option-card:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .masking-option-card.selected {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        .option-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+        }
+        .option-text h6 {
+            margin: 0 0 5px 0;
+            color: #495057;
+            font-size: 0.9rem;
+        }
+        .option-text small {
+            color: #6c757d;
+            font-size: 0.8rem;
+            line-height: 1.2;
+        }
+        .perturbation-options-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .perturbation-option-group {
+            flex: 1;
+            min-width: 200px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+        }
+        .option-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .option-controls {
+            margin-top: 10px;
+        }
+        .form-range {
+            margin-bottom: 5px;
+        }
+        .form-range::-webkit-slider-thumb {
+            background-color: #007bff;
+        }
+        .form-range::-moz-range-thumb {
+            background-color: #007bff;
+        }
+        
+        .project-card {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .project-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .project-card.selected {
+            border-color: #007bff;
+            background: #f8f9ff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+        }
+        
+        .project-image {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .project-info {
+            margin-bottom: 1rem;
+        }
+        
+        .project-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .project-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-number {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .project-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .project-actions .btn {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+        
+        .no-projects {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6c757d;
+        }
+        
+        .no-projects i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+
+    </style>
+</head>
+<body>
+    <div class="container mt-5 mb-5" style="padding-bottom: 100px;">
+        
+        <!-- 뒤로가기 버튼 -->
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="goBack()" style="width: 70px; height: 70px; border-radius: 50%; padding: 0;">
+                <svg width="32" height="32" viewBox="0 0 24 24" class="custom-arrow">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <h1 class="page-title text-center">Perturbation Analysis Tool</h1>
+        
+        <!-- 모델 설정 행 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Model Configuration</h5>
+                <div class="section-description">
+                    <small>교란 시각화를 위한 YOLO 모델을 설정하세요. 사전 훈련된 모델을 로드하고 환경을 구성합니다.</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 첫 번째 줄 -->
+                <div class="row align-items-end mb-4">
+                    <!-- 모델 선택 -->
+                    <div class="col">
+                        <label for="modelSelect" class="form-label">
+                            Select Model
+                        </label>
+                        <select class="form-select" id="modelSelect" required>
+                            <option value="">Choose a model...</option>
+                            {% for model in models %}
+                            <option value="{{ model }}">{{ model }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="help-text">교란 시각화를 위해 models 디렉토리에서 YOLO 모델(.pt 파일)을 선택하세요</div>
+                    </div>
+
+                    <!-- GPU 사용 여부 -->
+                    <div class="col">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="useGpu">
+                            <label class="form-check-label" for="useGpu">
+                                Use GPU
+                            </label>
+                        </div>
+                        <div class="help-text">더 빠른 처리를 위해 GPU 가속을 활성화합니다 (CUDA 호환 GPU 필요)</div>
+                    </div>
+
+                    <!-- 모델 시각화 버튼 -->
+                    <div class="col text-center">
+                        <button type="button" class="btn btn-info me-2" onclick="visualizeModel()" id="visualizeButton" style="display: none;">
+                            Model Architecture
+                        </button>
+                        <div class="help-text" id="visualizeHelpText" style="display: none;">새 탭에서 Netron을 열어 모델 아키텍처를 시각화합니다</div>
+                    </div>
+
+                    <!-- Load Model 버튼 -->
+                    <div class="col d-flex justify-content-end">
+                        <button type="button" class="btn btn-brown" onclick="loadModel()">
+                            Load Model
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 두 번째 줄 -->
+                <div class="row align-items-end mt-2">
+                    <!-- Input Type 선택 -->
+                    <div class="col-auto">
+                        <label class="form-label">
+                            Input Type
+                        </label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="inputType" id="typeImage" value="image" checked>
+                            <label class="btn btn-outline-primary" for="typeImage">Image</label>
+                        </div>
+                        <div class="help-text">교란 시각화를 위해 이미지 파일을 선택하세요</div>
+                    </div>
+
+                    <!-- Configure Input 버튼 -->
+                    <div class="col d-flex justify-content-end">
+                        <button type="button" class="btn btn-brown" onclick="showSettings()">
+                            Configure Input
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 이미지 설정 행 (기본적으로 숨김) -->
+        <div id="imageSettings" class="card mb-4 settings-row">
+            <div class="card-header">
+                <h5>Image & Masking Settings</h5>
+                <div class="section-description">
+                    <small>이미지를 업로드하고 마스킹할 영역을 선택하여 교란 테스트를 수행하세요.</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 첫 번째 행: 이미지 업로드 및 Task 설정 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="imageUpload" class="form-label">
+                            Upload Image
+                        </label>
+                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required>
+                        <div class="help-text">교란 테스트를 위해 하나의 이미지 파일(JPG, PNG 등)을 선택하세요.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            Task
+                        </label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="task" id="taskCls" value="cls">
+                            <label class="btn btn-outline-primary" for="taskCls">Classification</label>
+
+                            <input type="radio" class="btn-check" name="task" id="taskOd" value="od" checked>
+                            <label class="btn btn-outline-primary" for="taskOd">Object Detection</label>
+
+                            <input type="radio" class="btn-check" name="task" id="taskSeg" value="seg">
+                            <label class="btn btn-outline-primary" for="taskSeg">Segmentation</label>
+                        </div>
+                        <div class="help-text">교란 테스트를 위한 컴퓨터 비전 작업 유형을 선택하세요</div>
+                    </div>
+                </div>
+
+                                <!-- 두 번째 행: 큰 이미지 표시 및 마스킹 영역 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="image-masking-container">
+                            <div class="image-display-area">
+                                <canvas id="imageCanvas" width="1000" height="800" style="border: 2px solid #ddd; border-radius: 8px; cursor: crosshair;"></canvas>
+                                <div class="canvas-overlay">
+                                    <div class="masking-controls">
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="clearMask()">
+                                            <i class="bi bi-eraser"></i> Clear Area
+                                        </button>
+                                        <button type="button" class="btn btn-success btn-sm" onclick="applyMask()">
+                                            <i class="bi bi-check-circle"></i> Apply Area
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 세 번째 행: 마스킹 옵션 선택 (기본적으로 숨김) -->
+                <div id="maskingOptionsSection" class="row" style="display: none; margin-top: 4rem;">
+                    <div class="col-12">
+                        <label class="form-label">
+                            <i class="bi bi-palette"></i> Masking Types
+                        </label>
+                        <div class="masking-options-container">
+                            <div class="masking-option-card" data-type="black">
+                                <div class="option-icon">⬛</div>
+                                <div class="option-text">
+                                    <h6>Black Mask</h6>
+                                    <small>마스킹된 영역을 검은색으로 채웁니다</small>
+                                </div>
+                            </div>
+                            <div class="masking-option-card" data-type="white">
+                                <div class="option-icon">⬜</div>
+                                <div class="option-text">
+                                    <h6>White Mask</h6>
+                                    <small>마스킹된 영역을 흰색으로 채웁니다</small>
+                                </div>
+                            </div>
+                            <div class="masking-option-card" data-type="gaussian">
+                                <div class="option-icon">🌫️</div>
+                                <div class="option-text">
+                                    <h6>Gaussian Noise</h6>
+                                    <small>마스킹된 영역에 가우시안 노이즈를 적용합니다</small>
+                                </div>
+                            </div>
+                            <div class="masking-option-card" data-type="blur">
+                                <div class="option-icon">👁️</div>
+                                <div class="option-text">
+                                    <h6>Blur</h6>
+                                    <small>마스킹된 영역을 블러 처리합니다</small>
+                                </div>
+                            </div>
+                            <div class="masking-option-card" data-type="inductive_bias">
+                                <div class="option-icon">🔄</div>
+                                <div class="option-text">
+                                    <h6>Inductive Bias</h6>
+                                    <small>마스킹된 영역을 bbox 내에서 이동시킵니다</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="help-text">적용할 마스킹 방식을 선택하세요. 하나만 선택 가능합니다. 캔버스에서 마우스를 드래그하여 자유로운 영역을 그릴 수 있습니다.</div>
+                    </div>
+                </div>
+
+                <!-- 네 번째 행: 추가 교란 옵션 (기본적으로 숨김) -->
+                <div id="perturbationOptionsSection" class="row" style="display: none; margin-top: 4rem;">
+                    <div class="col-12">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="form-check me-3">
+                                <input class="form-check-input" type="checkbox" id="enableExtraPerturbations">
+                                <label class="form-check-label" for="enableExtraPerturbations">
+                                    <i class="bi bi-sliders"></i> <strong>Enable Extra Perturbations</strong>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="perturbationControls" style="display: none;">
+                            <div class="perturbation-options-container">
+                                <div class="perturbation-option-group">
+                                    <label class="option-label">Brightness</label>
+                                    <div class="option-controls">
+                                        <input type="range" class="form-range" id="brightnessSlider" 
+                                               min="-100" max="100" value="0" step="10" disabled>
+                                        <div class="d-flex justify-content-between">
+                                            <small>-100</small>
+                                            <small id="brightnessValue">0</small>
+                                            <small>+100</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="perturbation-option-group">
+                                    <label class="option-label">Rotation</label>
+                                    <div class="option-controls">
+                                        <input type="range" class="form-range" id="rotationSlider" 
+                                               min="-180" max="180" value="0" step="10" disabled>
+                                        <div class="d-flex justify-content-between">
+                                            <small>-180°</small>
+                                            <small id="rotationValue">0°</small>
+                                            <small>+180°</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="perturbation-option-group">
+                                    <label class="option-label">Scale</label>
+                                    <div class="option-controls">
+                                        <input type="range" class="form-range" id="scaleSlider" 
+                                               min="0.5" max="1.5" value="1.0" step="0.1" disabled>
+                                        <div class="d-flex justify-content-between">
+                                            <small>0.5x</small>
+                                            <small id="scaleValue">1.0x</small>
+                                            <small>1.5x</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="help-text">추가적인 교란 옵션을 설정하세요. 마스킹과 함께 적용됩니다.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 다섯 번째 행: 프로젝트 이름 및 실행 버튼 (기본적으로 숨김) -->
+                <div id="projectSection" class="row" style="display: none; margin-top: 4rem;">
+                    <div class="col-12 d-flex align-items-end justify-content-end">
+                        <div style="margin-right: 60px;">
+                            <label for="projectName" class="form-label">
+                                Project Name
+                            </label>
+                            <input type="text" class="form-control" id="projectName" 
+                                   placeholder="Enter project name" required style="width: 300px;">
+                            <div class="help-text">교란 테스트 프로젝트의 고유한 이름을 입력하세요.</div>
+                        </div>
+                        <button type="button" class="btn btn-warning btn-lg px-5 py-3"
+                                style="width: 220px; font-size: 1.5rem; flex-shrink: 0;"
+                                onclick="runPerturbation()">
+                            <i class="bi bi-play-fill fs-4"></i> Run Inference
+                        </button>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+        <!-- 기존 프로젝트 섹션 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="bi bi-folder2-open"></i> Existing Projects</h5>
+                <div class="section-description">
+                    <small>이전에 생성된 교란 분석 프로젝트들을 확인하고 결과를 다시 볼 수 있습니다.</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="existingProjectsContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading existing projects...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 이미지 미리보기 관련 스타일
+        const previewStyles = `
+            .preview-container {
+                position: relative;
+                margin: 5px;
+                display: inline-block;
+            }
+            .preview-image {
+                max-width: 150px;
+                max-height: 150px;
+                object-fit: cover;
+                border-radius: 4px;
+            }
+            .remove-preview {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                background: red;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                text-align: center;
+                line-height: 20px;
+                cursor: pointer;
+            }
+        `;
+
+        // 스타일 추가
+        const styleSheet = document.createElement("style");
+        styleSheet.textContent = previewStyles;
+        document.head.appendChild(styleSheet);
+
+        // 입력 타입에 따른 설정 표시
+        function showSettings() {
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            document.getElementById('imageSettings').style.display = inputType === 'image' ? 'block' : 'none';
+        }
+
+        // 이미지 업로드 처리
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    loadImageToCanvas(e.target.result);
+                    
+                    // 이미지 로드 완료 후 숨겨진 옵션 섹션들 표시
+                    setTimeout(() => {
+                        showOptionsSections();
+                    }, 500);
+                }
+                
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Canvas에 이미지 로드
+        function loadImageToCanvas(imageSrc) {
+            const canvas = document.getElementById('imageCanvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = function() {
+                // Canvas 크기 조정 - 이미지를 더 크게 표시
+                const canvasWidth = 1000;
+                const canvasHeight = 800;
+                let { width, height } = img;
+                
+                // 이미지 비율 계산
+                const imageRatio = width / height;
+                const canvasRatio = canvasWidth / canvasHeight;
+                
+                let drawWidth, drawHeight;
+                
+                if (imageRatio > canvasRatio) {
+                    // 이미지가 더 넓은 경우
+                    drawWidth = canvasWidth;
+                    drawHeight = canvasWidth / imageRatio;
+                } else {
+                    // 이미지가 더 높은 경우
+                    drawHeight = canvasHeight;
+                    drawWidth = canvasHeight * imageRatio;
+                }
+                
+                // Canvas 크기를 고정하고 이미지를 그 안에 맞춤
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                
+                // 이미지를 Canvas 중앙에 그리기
+                const offsetX = (canvasWidth - drawWidth) / 2;
+                const offsetY = (canvasHeight - drawHeight) / 2;
+                
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                
+                // 좌표 변환을 위한 정보 저장
+                window.imageTransform = {
+                    originalWidth: width,
+                    originalHeight: height,
+                    drawWidth: drawWidth,
+                    drawHeight: drawHeight,
+                    offsetX: offsetX,
+                    offsetY: offsetY
+                };
+                
+                console.log('=== IMAGE TRANSFORM INFO SAVED ===');
+                console.log('Original image size:', width, 'x', height);
+                console.log('Canvas size:', canvasWidth, 'x', canvasHeight);
+                console.log('Draw size:', drawWidth, 'x', drawHeight);
+                console.log('Offset:', offsetX, ',', offsetY);
+                console.log('Image transform object:', window.imageTransform);
+                console.log('=== END IMAGE TRANSFORM INFO ===');
+                
+                // 마스킹 기능 초기화
+                initMasking(canvas);
+                
+                // 마지막 이미지 소스 저장
+                window.lastImageSrc = imageSrc;
+            };
+            
+            img.src = imageSrc;
+        }
+
+        // 마스킹 기능 초기화
+        function initMasking(canvas) {
+            let isDrawing = false;
+            let maskPath = [];
+            let ctx = canvas.getContext('2d');
+            
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            function startDrawing(e) {
+                isDrawing = true;
+                maskPath = [];
+                
+                const rect = canvas.getBoundingClientRect();
+                // 캔버스의 실제 크기와 CSS 크기의 비율 계산
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                
+                console.log('Mouse event:', e.clientX, e.clientY);
+                console.log('Canvas rect:', rect.left, rect.top, rect.width, rect.height);
+                console.log('Canvas size:', canvas.width, canvas.height);
+                console.log('Scale factors:', scaleX, scaleY);
+                console.log('Calculated coords:', x, y);
+                
+                // 새로운 경로 시작
+                maskPath.push({ x, y });
+                
+                // 경로 그리기 시작
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+            
+            function draw(e) {
+                if (!isDrawing) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                // 캔버스의 실제 크기와 CSS 크기의 비율 계산
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                
+                // 경로에 점 추가
+                maskPath.push({ x, y });
+                
+                // 선 그리기
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+            
+            function stopDrawing() {
+                if (!isDrawing) return;
+                
+                isDrawing = false;
+                
+                // 경로가 충분히 긴 경우에만 마스킹 영역으로 처리
+                if (maskPath.length > 10) {
+                    // 경로를 닫기
+                    if (maskPath.length > 0) {
+                        ctx.lineTo(maskPath[0].x, maskPath[0].y);
+                        ctx.stroke();
+                        
+                        // 마스킹 영역 채우기
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                        ctx.fill();
+                        
+                        // 마스크 데이터 저장
+                        window.maskData = maskPath;
+                        console.log('Mask area created with', maskPath.length, 'points');
+                    }
+                } else {
+                    // 너무 짧은 경로는 무시하고 원본 이미지 다시 그리기
+                    clearMask();
+                }
+            }
+            
+            // 전역 변수로 저장
+            window.canvas = canvas;
+        }
+
+        // 마스크 지우기
+        function clearMask() {
+            const canvas = document.getElementById('imageCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 원본 이미지 다시 그리기
+            const img = new Image();
+            img.onload = function() {
+                const canvasWidth = 1000;
+                const canvasHeight = 800;
+                let { width, height } = img;
+                
+                // 이미지 비율 계산
+                const imageRatio = width / height;
+                const canvasRatio = canvasWidth / canvasHeight;
+                
+                let drawWidth, drawHeight;
+                
+                if (imageRatio > canvasRatio) {
+                    drawWidth = canvasWidth;
+                    drawHeight = canvasWidth / imageRatio;
+                } else {
+                    drawHeight = canvasHeight;
+                    drawWidth = canvasHeight * imageRatio;
+                }
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 이미지를 Canvas 중앙에 그리기
+                const offsetX = (canvasWidth - drawWidth) / 2;
+                const offsetY = (canvasHeight - drawHeight) / 2;
+                
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+            };
+            
+            // 마지막으로 로드된 이미지 다시 그리기
+            if (window.lastImageSrc) {
+                img.src = window.lastImageSrc;
+            }
+            
+            // 마스크 데이터 초기화
+            window.maskData = [];
+            window.transformedMaskData = null;
+        }
+
+        // 옵션 섹션 표시 함수
+        function showOptionsSections() {
+            // 마스킹 옵션 섹션 표시
+            document.getElementById('maskingOptionsSection').style.display = 'block';
+            
+            // 추가 교란 옵션 섹션 표시
+            document.getElementById('perturbationOptionsSection').style.display = 'block';
+            
+            // 프로젝트 섹션 표시
+            document.getElementById('projectSection').style.display = 'block';
+            
+            // 부드러운 애니메이션 효과
+            const sections = [
+                document.getElementById('maskingOptionsSection'),
+                document.getElementById('perturbationOptionsSection'),
+                document.getElementById('projectSection')
+            ];
+            
+            sections.forEach((section, index) => {
+                section.style.opacity = '0';
+                section.style.transform = 'translateY(20px)';
+                section.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                
+                setTimeout(() => {
+                    section.style.opacity = '1';
+                    section.style.transform = 'translateY(0)';
+                }, index * 200);
+            });
+        }
+
+        // 마스킹 옵션 선택 처리
+        document.addEventListener('DOMContentLoaded', function() {
+            // 마스킹 옵션 카드 클릭 이벤트
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.masking-option-card')) {
+                    const card = e.target.closest('.masking-option-card');
+                    
+                    // 다른 카드들의 선택 상태 제거
+                    document.querySelectorAll('.masking-option-card').forEach(c => {
+                        c.classList.remove('selected');
+                    });
+                    
+                    // 현재 카드 선택
+                    card.classList.add('selected');
+                    
+                    // 선택된 마스킹 타입 저장
+                    window.selectedMaskingType = card.getAttribute('data-type');
+                    console.log('Selected masking type:', window.selectedMaskingType);
+                }
+            });
+
+            // Extra Perturbations 체크박스 이벤트
+            document.getElementById('enableExtraPerturbations').addEventListener('change', function(e) {
+                const perturbationControls = document.getElementById('perturbationControls');
+                const sliders = document.querySelectorAll('#perturbationControls input[type="range"]');
+                
+                if (e.target.checked) {
+                    // 체크박스가 체크되면 컨트롤 표시 및 활성화
+                    perturbationControls.style.display = 'block';
+                    sliders.forEach(slider => {
+                        slider.disabled = false;
+                    });
+                    window.extraPerturbationsEnabled = true;
+                } else {
+                    // 체크박스가 해제되면 컨트롤 숨김 및 비활성화
+                    perturbationControls.style.display = 'none';
+                    sliders.forEach(slider => {
+                        slider.disabled = true;
+                    });
+                    window.extraPerturbationsEnabled = false;
+                }
+            });
+
+            // 추가 교란 옵션 슬라이더 이벤트
+            document.addEventListener('input', function(e) {
+                if (e.target.id === 'brightnessSlider') {
+                    document.getElementById('brightnessValue').textContent = e.target.value;
+                    window.brightnessValue = parseInt(e.target.value);
+                } else if (e.target.id === 'rotationSlider') {
+                    document.getElementById('rotationValue').textContent = e.target.value + '°';
+                    window.rotationValue = parseInt(e.target.value);
+                } else if (e.target.id === 'scaleSlider') {
+                    document.getElementById('scaleValue').textContent = e.target.value + 'x';
+                    window.scaleValue = parseFloat(e.target.value);
+                }
+            });
+
+            // 초기값 설정
+            window.brightnessValue = 0;
+            window.rotationValue = 0;
+            window.scaleValue = 1.0;
+            window.extraPerturbationsEnabled = false;
+        });
+
+        // 캔버스 좌표를 실제 이미지 좌표로 변환하는 함수 (단순화된 버전)
+        function transformCanvasToImageCoords(canvasCoords) {
+            if (!window.imageTransform) {
+                console.error('Image transform information not available');
+                return canvasCoords;
+            }
+            
+            const transform = window.imageTransform;
+            const transformedCoords = [];
+            
+            console.log('=== SIMPLIFIED COORDINATE TRANSFORMATION ===');
+            console.log('Transform info:', transform);
+            console.log('Canvas coords sample:', canvasCoords.slice(0, 3));
+            
+            for (let i = 0; i < canvasCoords.length; i++) {
+                const coord = canvasCoords[i];
+                
+                // 캔버스 좌표에서 오프셋 제거
+                let x = coord.x - transform.offsetX;
+                let y = coord.y - transform.offsetY;
+                
+                // 그려진 크기에서 원본 크기로 스케일 변환
+                x = (x / transform.drawWidth) * transform.originalWidth;
+                y = (y / transform.drawHeight) * transform.originalHeight;
+                
+                // 좌표 범위 제한
+                x = Math.max(0, Math.min(x, transform.originalWidth - 1));
+                y = Math.max(0, Math.min(y, transform.originalHeight - 1));
+                
+                const finalX = Math.round(x);
+                const finalY = Math.round(y);
+                
+                transformedCoords.push({ x: finalX, y: finalY });
+                
+                if (i < 3) {
+                    console.log(`Point ${i}: (${coord.x}, ${coord.y}) -> (${finalX}, ${finalY})`);
+                }
+            }
+            
+            console.log('Final transformed coords sample:', transformedCoords.slice(0, 3));
+            console.log('=== END TRANSFORMATION ===');
+            return transformedCoords;
+        }
+
+        // 마스크 적용
+        function applyMask() {
+            if (!window.maskData || window.maskData.length === 0) {
+                alert('Please draw a mask area first');
+                return;
+            }
+            
+            if (!window.selectedMaskingType) {
+                alert('Please select a masking option first');
+                return;
+            }
+            
+            // 캔버스 좌표를 실제 이미지 좌표로 변환
+            const transformedMaskData = transformCanvasToImageCoords(window.maskData);
+            
+            // 변환된 마스크 데이터 저장
+            window.transformedMaskData = transformedMaskData;
+            
+            // 마스크 데이터와 선택된 마스킹 타입을 서버로 전송할 준비
+            console.log('Original canvas mask data:', window.maskData);
+            console.log('Transformed image mask data:', transformedMaskData);
+            console.log('Masking type:', window.selectedMaskingType);
+            console.log('Mask area points:', transformedMaskData.length);
+            alert('Mask applied successfully!');
+        }
+
+        // 모델 로드 함수
+        function loadModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const useGpu = document.getElementById('useGpu').checked;
+            const visualizeButton = document.getElementById('visualizeButton');
+            const visualizeHelpText = document.getElementById('visualizeHelpText');
+            
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            visualizeButton.style.display = 'none';
+            visualizeHelpText.style.display = 'none';
+            
+            fetch('/api/model/load', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName,
+                    use_gpu: useGpu
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    visualizeButton.style.display = 'inline-block';
+                    visualizeHelpText.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to load model');
+            });
+        }
+
+        // 모델 시각화 함수
+        function visualizeModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const visualizeButton = document.getElementById('visualizeButton');
+            
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            visualizeButton.disabled = true;
+            
+            fetch('/api/model/visualize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    window.open(data.url, '_blank');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to visualize model');
+            })
+            .finally(() => {
+                setTimeout(() => {
+                    visualizeButton.disabled = false;
+                }, 1000);
+            });
+        }
+
+        // 교란 처리 실행 함수
+        function runPerturbation() {
+            const formData = new FormData();
+            
+            // 필수 입력 확인
+            const modelSelect = document.getElementById('modelSelect');
+            if (!modelSelect.value) {
+                alert('Please select a model first');
+                return;
+            }
+
+            const projectName = document.getElementById('projectName').value.trim();
+            if (!projectName) {
+                alert('Please enter a project name');
+                return;
+            }
+
+            const imageUpload = document.getElementById('imageUpload');
+            if (!imageUpload.files.length) {
+                alert('Please upload an image');
+                return;
+            }
+
+            if (!window.maskData || window.maskData.length === 0) {
+                alert('Please draw a mask on the image');
+                return;
+            }
+
+            if (!window.selectedMaskingType) {
+                alert('Please select a masking option');
+                return;
+            }
+
+            // 마스크 데이터가 변환되지 않았다면 변환 수행
+            if (!window.transformedMaskData) {
+                console.log('Transforming mask coordinates...');
+                const transformedMaskData = transformCanvasToImageCoords(window.maskData);
+                window.transformedMaskData = transformedMaskData;
+            }
+
+            // 프로젝트 이름 중복 확인
+            checkProjectExists(projectName).then(exists => {
+                if (exists) {
+                    alert('This project name already exists. Please choose a different name.');
+                    return;
+                }
+                
+                // 교란 처리 진행
+                proceedWithPerturbationProcessing(formData, projectName);
+            });
+        }
+
+        function proceedWithPerturbationProcessing(formData, projectName) {
+            // 공통 설정
+            formData.append('model', document.getElementById('modelSelect').value);
+            formData.append('useGpu', document.getElementById('useGpu').checked);
+            formData.append('projectName', projectName);
+
+            // 이미지 파일 추가
+            const imageUpload = document.getElementById('imageUpload');
+            formData.append('image', imageUpload.files[0]);
+            
+            // Task 정보 추가
+            formData.append('task', document.querySelector('input[name="task"]:checked').value);
+            
+            // 변환된 마스크 데이터 추가 (실제 이미지 좌표)
+            const maskDataToSend = window.transformedMaskData || window.maskData;
+            console.log('Sending mask data to server:', maskDataToSend);
+            console.log('Mask data length:', maskDataToSend.length);
+            console.log('First few points:', maskDataToSend.slice(0, 3));
+            formData.append('mask_data', JSON.stringify(maskDataToSend));
+            
+            // 마스킹 타입 추가
+            formData.append('masking_type', window.selectedMaskingType);
+            
+            // 추가 교란 옵션 값들 추가 (활성화된 경우에만)
+            if (window.extraPerturbationsEnabled) {
+                formData.append('brightness', window.brightnessValue || 0);
+                formData.append('rotation', window.rotationValue || 0);
+                formData.append('scale', window.scaleValue || 1.0);
+                formData.append('extra_perturbations_enabled', 'true');
+            } else {
+                formData.append('extra_perturbations_enabled', 'false');
+            }
+
+            // 로딩 표시
+            const runButton = document.querySelector('button[onclick="runPerturbation()"]');
+            const originalText = runButton.innerHTML;
+            runButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            runButton.disabled = true;
+
+            // API 호출
+            fetch('run_perturbation', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    const errorMessage = data.error.message || data.error;
+                    alert(`Error occurred:\n${errorMessage}`);
+                } else {
+                    // 성공시 결과 페이지로 이동
+                    window.location.href = data.redirect_url;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during perturbation processing');
+            })
+            .finally(() => {
+                // 버튼 상태 복구
+                runButton.innerHTML = originalText;
+                runButton.disabled = false;
+            });
+        }
+
+        // 프로젝트 이름 중복 확인 함수
+        function checkProjectExists(projectName) {
+            return fetch('/api/project/check', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                return data.exists;
+            })
+            .catch(error => {
+                console.error('Error checking project:', error);
+                return false;
+            });
+        }
+
+        // 프로젝트 이름 입력 시 실시간 중복 확인
+        document.getElementById('projectName').addEventListener('input', function() {
+            const projectName = this.value.trim();
+            if (projectName.length > 0) {
+                checkProjectExists(projectName).then(exists => {
+                    if (exists) {
+                        this.style.borderColor = '#dc3545';
+                        this.style.backgroundColor = '#fff5f5';
+                        let helpText = this.parentNode.querySelector('.form-text');
+                        if (!helpText) {
+                            helpText = document.createElement('div');
+                            helpText.className = 'form-text text-danger';
+                            this.parentNode.appendChild(helpText);
+                        }
+                        helpText.textContent = 'This project name already exists. Please choose a different name.';
+                    } else {
+                        this.style.borderColor = '#198754';
+                        this.style.backgroundColor = '#f8fff9';
+                        const helpText = this.parentNode.querySelector('.form-text.text-danger');
+                        if (helpText) {
+                            helpText.remove();
+                        }
+                    }
+                });
+            } else {
+                this.style.borderColor = '';
+                this.style.backgroundColor = '';
+                const helpText = this.parentNode.querySelector('.form-text.text-danger');
+                if (helpText) {
+                    helpText.remove();
+                }
+            }
+        });
+
+
+
+        // 기존 프로젝트 로드 함수
+        function loadExistingProjects() {
+            fetch('/api/perturbation/project/list', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                displayExistingProjects(data.projects);
+            })
+            .catch(error => {
+                console.error('Error loading projects:', error);
+                displayNoProjects();
+            });
+        }
+
+        // 기존 프로젝트 표시 함수
+        function displayExistingProjects(projects) {
+            const container = document.getElementById('existingProjectsContainer');
+            
+            console.log('Received projects:', projects);
+            
+            if (!projects || projects.length === 0) {
+                displayNoProjects();
+                return;
+            }
+            
+            const projectsHTML = projects.map(project => `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="project-card" onclick="selectProject('${project.name}')">
+                        <img src="/static/${project.original_image}" alt="Project ${project.name}" class="project-image">
+                        <div class="project-info">
+                            <div class="project-name">${project.name}</div>
+                            <div class="project-stats">
+                                <div class="stat-item">
+                                    <div class="stat-number">${project.original_detections}</div>
+                                    <div class="stat-label">Original</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-number">${project.perturbed_detections}</div>
+                                    <div class="stat-label">Perturbed</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-number">${project.matched_objects}</div>
+                                    <div class="stat-label">Matched</div>
+                                </div>
+                            </div>
+                            <div class="project-actions">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation(); viewProject('${project.name}')">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteProject('${project.name}')">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `
+                <div class="row">
+                    ${projectsHTML}
+                </div>
+            `;
+        }
+
+        // 프로젝트가 없을 때 표시
+        function displayNoProjects() {
+            const container = document.getElementById('existingProjectsContainer');
+            container.innerHTML = `
+                <div class="no-projects">
+                    <i class="bi bi-folder-x"></i>
+                    <h5>No Projects Found</h5>
+                    <p>Create your first perturbation analysis project to get started.</p>
+                </div>
+            `;
+        }
+
+        // 프로젝트 선택 함수
+        function selectProject(projectName) {
+            // 선택된 프로젝트 하이라이트
+            document.querySelectorAll('.project-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            const selectedCard = document.querySelector(`[onclick*="${projectName}"]`);
+            if (selectedCard) {
+                selectedCard.classList.add('selected');
+            }
+        }
+
+        // 프로젝트 보기 함수
+        function viewProject(projectName) {
+            fetch('/api/perturbation/project/load', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                window.location.href = data.redirect_url;
+            })
+            .catch(error => {
+                console.error('Error loading project:', error);
+                alert('Failed to load project: ' + error.message);
+            });
+        }
+
+        // 프로젝트 삭제 함수
+        function deleteProject(projectName) {
+            if (!confirm(`Are you sure you want to delete project "${projectName}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            fetch('/api/perturbation/project/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                alert('Project deleted successfully!');
+                loadExistingProjects(); // 프로젝트 목록 새로고침
+            })
+            .catch(error => {
+                console.error('Error deleting project:', error);
+                alert('Failed to delete project: ' + error.message);
+            });
+        }
+
+        // 페이지 로드 시 기존 프로젝트 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadExistingProjects();
+        });
+
+        // 뒤로가기 함수
+        function goBack() {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

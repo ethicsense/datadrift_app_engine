@@ -19,8 +19,9 @@
         .btn-container {
             margin-top: 2rem;
             display: flex;
-            gap: 3rem;
+            gap: 2rem;
             justify-content: center;
+            flex-wrap: wrap;
         }
         .btn-wrapper {
             display: flex;
@@ -43,12 +44,12 @@
             font-size: 0.9rem;
         }
         .btn-large {
-            width: 300px;
-            height: 300px;
+            width: 250px;
+            height: 250px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
+            font-size: 1.8rem;
             border-radius: 15px;
             transition: all 0.3s ease;
             text-align: center;
@@ -98,9 +99,12 @@
         .sampler-btn::before {
             background-image: url('/static/images/data_sampler.png');
         }
+        .perturbation-btn::before {
+            background-image: url('/static/images/perturbation_vis.jpg');
+        }
         
         h1 {
-            margin-bottom: 3rem;
+            margin-bottom: 0.5rem;
             color: #2c3e50;
             font-size: 3.5rem;
             font-weight: 700;
@@ -122,6 +126,15 @@
             height: 3px;
             background: linear-gradient(to right, #3498db, #2ecc71);
             border-radius: 2px;
+        }
+
+        .subtitle-text {
+            margin-bottom: 2rem;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            font-style: italic;
+            font-family: 'Poppins', sans-serif;
+            letter-spacing: 0.5px;
         }
 
         .title-container {
@@ -153,6 +166,7 @@
         <img src="/static/images/main.png" alt="Main Image" class="main-image">
         <div class="title-container">
             <h1>Diagnosis</h1>
+            <p class="text-center subtitle-text">For Data-Drift Management</p>
         </div>
         <div class="btn-container">
             <div class="btn-wrapper">
@@ -171,6 +185,15 @@
                 <div class="btn-description">
                     <small>데이터 샘플링을 통해 모델 훈련을 위한 데이터셋을 구성하고 
                     자동화된 훈련 파이프라인을 실행합니다.</small>
+                </div>
+            </div>
+            <div class="btn-wrapper">
+                <a href="{{ url_for('perturbation_vis') }}" class="btn btn-large perturbation-btn">
+                    <span>Perturbation Vis</span>
+                </a>
+                <div class="btn-description">
+                    <small>교란 기능을 시각적으로 테스트하고 모델의 견고성을 
+                    분석할 수 있는 도구입니다.</small>
                 </div>
             </div>
         </div>

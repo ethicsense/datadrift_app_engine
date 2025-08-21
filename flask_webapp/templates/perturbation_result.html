@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perturbation Analysis Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .page-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 2rem;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stats-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .image-comparison {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .image-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .image-container img {
+            width: 100%;
+            height: auto;
+            transition: transform 0.3s ease;
+        }
+        
+        .image-container:hover img {
+            transform: scale(1.05);
+        }
+        
+        .image-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .matching-results {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .match-card {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .match-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.2);
+        }
+        
+        .match-card.iou-match {
+            border-left: 4px solid #28a745;
+        }
+        
+        .match-card.distance-match {
+            border-left: 4px solid #ffc107;
+        }
+        
+        .confidence-change {
+            font-weight: bold;
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .confidence-change.positive {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .confidence-change.negative {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .confidence-change.neutral {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .analysis-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar-custom {
+            height: 8px;
+            border-radius: 4px;
+            background: #e9ecef;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+        
+
+        
+        .settings-badge {
+            background: #e9ecef;
+            color: #495057;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin: 0.25rem;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+        
+        .settings-badge.active {
+            background: #007bff;
+            color: white;
+        }
+        
+        .custom-arrow {
+            stroke-width: 4;
+            stroke: currentColor;
+            fill: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5 mb-5" style="padding-bottom: 100px;">
+        
+        <!-- 뒤로가기 버튼 -->
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="goBack()" style="width: 70px; height: 70px; border-radius: 50%; padding: 0;">
+                <svg width="32" height="32" viewBox="0 0 24 24" class="custom-arrow">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        <!-- 헤더 섹션 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="page-title text-center">
+                    <i class="bi bi-graph-up"></i> Perturbation Analysis Results
+                </h1>
+                <div class="text-center mb-4">
+                    <h4 class="text-muted">{{ project_name }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 카드 섹션 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number">{{ images[0].original_detections|length }}</div>
+                    <div class="stats-label">Original Detections</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number">{{ images[0].perturbed_detections|length }}</div>
+                    <div class="stats-label">Perturbed Detections</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number">{{ images[0].matched_pairs.matched_pairs|length }}</div>
+                    <div class="stats-label">Matched Objects</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number">
+                        {% set avg_change = images[0].matched_pairs.matched_pairs|map(attribute='confidence_change')|list|sum / images[0].matched_pairs.matched_pairs|length if images[0].matched_pairs.matched_pairs|length > 0 else 0 %}
+                        {{ "%.3f"|format(avg_change) }}
+                    </div>
+                    <div class="stats-label">Avg Confidence Change</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 교란 설정 정보 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="analysis-section">
+                    <h5><i class="bi bi-gear"></i> Perturbation Settings</h5>
+                    <div class="mb-3">
+                        <strong>Masking Type:</strong>
+                        <span class="settings-badge active">{{ images[0].perturbation_settings.masking_type|title }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Mask Points:</strong>
+                        <span class="settings-badge">{{ images[0].perturbation_settings.mask_points_count }} points</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Extra Perturbations:</strong>
+                        {% if images[0].perturbation_settings.extra_perturbations.enabled %}
+                            <span class="settings-badge active">Enabled</span>
+                            {% if images[0].perturbation_settings.extra_perturbations.brightness != 0 %}
+                                <span class="settings-badge">Brightness: {{ images[0].perturbation_settings.extra_perturbations.brightness }}</span>
+                            {% endif %}
+                            {% if images[0].perturbation_settings.extra_perturbations.rotation != 0 %}
+                                <span class="settings-badge">Rotation: {{ images[0].perturbation_settings.extra_perturbations.rotation }}°</span>
+                            {% endif %}
+                            {% if images[0].perturbation_settings.extra_perturbations.scale != 1.0 %}
+                                <span class="settings-badge">Scale: {{ images[0].perturbation_settings.extra_perturbations.scale }}x</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="settings-badge">Disabled</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 이미지 비교 섹션 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="image-comparison">
+                    <h5 class="mb-4"><i class="bi bi-images"></i> Image Comparison</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img src="{{ url_for('static', filename=images[0].original_image) }}" alt="Original Image (640x640)">
+                                <div class="image-label">Original Image (640x640)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img src="{{ url_for('static', filename=images[0].perturbed_image) }}" alt="Perturbed Image (640x640)">
+                                <div class="image-label">Perturbed Image (640x640)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img src="{{ url_for('static', filename=images[0].original_inference_image) }}" alt="Original Inference">
+                                <div class="image-label">Original Inference</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img src="{{ url_for('static', filename=images[0].perturbed_inference_image) }}" alt="Perturbed Inference">
+                                <div class="image-label">Perturbed Inference</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 매칭 결과 분석 섹션 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="matching-results">
+                    <h5 class="mb-4"><i class="bi bi-link-45deg"></i> Object Matching Analysis</h5>
+                    
+                    {% if images[0].matched_pairs.matched_pairs %}
+                        {% for pair in images[0].matched_pairs.matched_pairs %}
+                        <div class="match-card {{ pair.match_type }}-match">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <strong>{{ pair.original_detection.class_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">Class ID: {{ pair.original_detection.class_id }}</small>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <div class="fw-bold">Original</div>
+                                        <div class="text-success">{{ "%.3f"|format(pair.original_detection.confidence) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <i class="bi bi-arrow-right fs-4 text-muted"></i>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <div class="fw-bold">Perturbed</div>
+                                        <div class="text-primary">{{ "%.3f"|format(pair.perturbed_detection.confidence) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="fw-bold">Change</div>
+                                        {% set change_class = 'positive' if pair.confidence_change > 0 else 'negative' if pair.confidence_change < 0 else 'neutral' %}
+                                        <span class="confidence-change {{ change_class }}">
+                                            {{ "%+.3f"|format(pair.confidence_change) }}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">
+                                            {% if pair.match_type == 'iou' %}
+                                                IoU: {{ "%.3f"|format(pair.iou) }}
+                                            {% else %}
+                                                Distance: {{ "%.1f"|format(pair.center_distance) }}px
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-exclamation-triangle fs-1"></i>
+                            <p class="mt-3">No matched objects found between original and perturbed images.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 상세 분석 섹션 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="analysis-section">
+                    <h5><i class="bi bi-bar-chart"></i> Detection Statistics</h5>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Detection Rate</span>
+                            <span>
+                                {% set detection_rate = (images[0].perturbed_detections|length / images[0].original_detections|length * 100) if images[0].original_detections|length > 0 else 0 %}
+                                {{ "%.1f"|format(detection_rate) }}%
+                            </span>
+                        </div>
+                        <div class="progress-bar-custom">
+                            <div class="progress-fill" data-width="{{ detection_rate }}"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Matching Rate</span>
+                            <span>
+                                {% set matching_rate = (images[0].matched_pairs.matched_pairs|length / images[0].original_detections|length * 100) if images[0].original_detections|length > 0 else 0 %}
+                                {{ "%.1f"|format(matching_rate) }}%
+                            </span>
+                        </div>
+                        <div class="progress-bar-custom">
+                            <div class="progress-fill" data-width="{{ matching_rate }}"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Unmatched Objects:</h6>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <div class="fw-bold text-danger">{{ images[0].matched_pairs.unmatched_original_indices|length }}</div>
+                                    <small class="text-muted">Lost in Original</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <div class="fw-bold text-warning">{{ images[0].matched_pairs.unmatched_perturbed_indices|length }}</div>
+                                    <small class="text-muted">New in Perturbed</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="analysis-section">
+                    <h5><i class="bi bi-info-circle"></i> Analysis Summary</h5>
+                    
+                    <div class="mb-3">
+                        <strong>Perturbation Impact:</strong>
+                        {% set avg_change = images[0].matched_pairs.matched_pairs|map(attribute='confidence_change')|list|sum / images[0].matched_pairs.matched_pairs|length if images[0].matched_pairs.matched_pairs|length > 0 else 0 %}
+                        {% if avg_change > 0.05 %}
+                            <span class="badge bg-success">Positive Impact</span>
+                        {% elif avg_change < -0.05 %}
+                            <span class="badge bg-danger">Negative Impact</span>
+                        {% else %}
+                            <span class="badge bg-warning">Minimal Impact</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Model Robustness:</strong>
+                        {% set robustness_score = (images[0].matched_pairs.matched_pairs|length / images[0].original_detections|length * 100) if images[0].original_detections|length > 0 else 0 %}
+                        {% if robustness_score > 80 %}
+                            <span class="badge bg-success">High</span>
+                        {% elif robustness_score > 50 %}
+                            <span class="badge bg-warning">Medium</span>
+                        {% else %}
+                            <span class="badge bg-danger">Low</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Matching Quality:</strong>
+                        {% set iou_matches = images[0].matched_pairs.matched_pairs|selectattr('match_type', 'equalto', 'iou')|list|length %}
+                        {% set total_matches = images[0].matched_pairs.matched_pairs|length %}
+                        {% set quality_score = (iou_matches / total_matches * 100) if total_matches > 0 else 0 %}
+                        {% if quality_score > 70 %}
+                            <span class="badge bg-success">High Quality</span>
+                        {% elif quality_score > 40 %}
+                            <span class="badge bg-warning">Medium Quality</span>
+                        {% else %}
+                            <span class="badge bg-danger">Low Quality</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 페이지 로드 시 progress bar width 설정
+        document.addEventListener('DOMContentLoaded', function() {
+            const progressFills = document.querySelectorAll('.progress-fill[data-width]');
+            progressFills.forEach(function(fill) {
+                const width = fill.getAttribute('data-width');
+                fill.style.width = width + '%';
+            });
+        });
+
+        // 뒤로가기 함수
+        function goBack() {
+            window.location.href = '/perturbation/upload_page';
+        }
+    </script>
+</body>
+</html>
