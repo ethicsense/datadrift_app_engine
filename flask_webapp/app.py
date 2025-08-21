@@ -93,7 +93,8 @@ def get_project_paths():
             'datasets_uploads': os.path.join(flask_webapp_dir, 'datasets', 'uploads'),
             'datasets_exported': os.path.join(flask_webapp_dir, 'datasets', 'exported_datasets'),
             'logs_dir': os.path.join(flask_webapp_dir, 'logs'),
-            'static_cam_results': os.path.join(flask_webapp_dir, 'static', 'cam_results')
+            'static_cam_results': os.path.join(flask_webapp_dir, 'static', 'cam_results'),
+            'static_perturbation_results': os.path.join(flask_webapp_dir, 'static', 'perturbation_results')
         }
 
 def get_fiftyone_manager():
@@ -126,7 +127,8 @@ def init_app(app):
             paths['datasets_uploads'],
             paths['datasets_exported'],
             paths['logs_dir'],
-            paths['static_cam_results']
+            paths['static_cam_results'],
+            paths['static_perturbation_results']
         ]
         
         for dir_path in required_dirs:
@@ -888,6 +890,12 @@ def cam_upload():
     models = [m for m in os.listdir(paths['models_dir'])]
     return render_template('camupload.html', models=models)
 
+@app.route('/perturbation/upload_page')
+def perturbation_vis():
+    paths = get_project_paths()
+    models = [m for m in os.listdir(paths['models_dir'])]
+    return render_template('perturbation_upload.html', models=models)
+
 @app.route('/api/model/load', methods=['POST'])
 def load_model():
     from ultralytics import YOLO
@@ -1175,6 +1183,626 @@ def load_existing_project():
         'success': True,
         'redirect_url': url_for('cam_result')
     })
+
+@app.route('/perturbation/run_perturbation', methods=['POST'])
+def run_perturbation():
+    try:
+        # 모델 로드 확인
+        if current_app.model_storage is None:
+            return jsonify({'error': 'Model not loaded. Please load the model first.'}), 400
+        
+        # 폼 데이터에서 값들 가져오기
+        model = current_app.model_storage
+        project_name = request.form.get('projectName')
+        task = request.form.get('task')
+        
+        # 마스킹 데이터 파싱
+        mask_data = json.loads(request.form.get('mask_data', '[]'))
+        masking_type = request.form.get('masking_type')
+        
+        print(f"Received mask data: {len(mask_data)} points")
+        print(f"Mask data sample: {mask_data[:3] if mask_data else 'No data'}")
+        print(f"Masking type: {masking_type}")
+        
+        # Extra Perturbations 설정
+        extra_perturbations_enabled = request.form.get('extra_perturbations_enabled') == 'true'
+        extra_perturbations = {'enabled': extra_perturbations_enabled}
+        
+        if extra_perturbations_enabled:
+            extra_perturbations.update({
+                'brightness': int(request.form.get('brightness', 0)),
+                'rotation': int(request.form.get('rotation', 0)),
+                'scale': float(request.form.get('scale', 1.0))
+            })
+        
+        # 이미지 파일 처리
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+        
+        image_file = request.files['image']
+        if image_file.filename == '':
+            return jsonify({'error': 'No image file selected'}), 400
+        
+        # 이미지 로드 및 전처리
+        data = image_file.read()
+        bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        original_img = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        
+        # 원본 이미지 크기 저장
+        original_height, original_width = original_img.shape[:2]
+        print(f"Original image size: {original_width} x {original_height}")
+        
+        # 마스크 좌표를 원본 이미지 크기에 맞게 조정
+        if mask_data:
+            # 캔버스에서 변환된 좌표는 원본 이미지 크기 기준이므로
+            # 추가 변환 없이 그대로 사용
+            print(f"Using mask data as-is for original image size: {mask_data[:3]}")
+        
+        # 원본 이미지에 마스크 적용
+        print("Applying perturbation to original image...")
+        perturbed_original = apply_perturbation(
+            original_img, 
+            mask_data, 
+            masking_type, 
+            extra_perturbations
+        )
+        
+        # 교란된 원본 이미지를 모델 입력 크기로 리사이즈 (640x640)
+        perturbed_img = cv2.resize(perturbed_original, (640, 640))
+        print(f"Resized perturbed image for model input: {perturbed_img.shape[1]} x {perturbed_img.shape[0]}")
+        
+        # 원본 이미지도 모델 입력 크기로 리사이즈 (640x640)
+        original_img = cv2.resize(original_img, (640, 640))
+        print(f"Resized original image for model input: {original_img.shape[1]} x {original_img.shape[0]}")
+        
+        # 1. 원본 이미지에 대한 추론 수행
+        print("Performing inference on original image...")
+        original_results = model(original_img)
+        original_boxes, original_colors, original_names = parse_detections(original_results)
+        
+        # 원본 추론 결과 저장
+        original_detections = []
+        for i, result in enumerate(original_results):
+            if len(result.boxes) > 0:
+                for j in range(len(result.boxes)):
+                    detection = {
+                        'class_name': result.names[int(result.boxes.cls[j])],
+                        'confidence': float(result.boxes.conf[j]),
+                        'bbox': result.boxes.xyxy[j].cpu().numpy().tolist(),  # [x1, y1, x2, y2]
+                        'class_id': int(result.boxes.cls[j]),
+                        'detection_id': f"orig_{i}_{j}"
+                    }
+                    original_detections.append(detection)
+        
+        # 2. 교란된 이미지에 대한 추론 수행
+        print("Performing inference on perturbed image...")
+        
+        # 3. 교란된 이미지에 대한 추론 수행
+        print("Performing inference on perturbed image...")
+        perturbed_results = model(perturbed_img)
+        perturbed_boxes, perturbed_colors, perturbed_names = parse_detections(perturbed_results)
+        
+        # 교란된 이미지 추론 결과 저장
+        perturbed_detections = []
+        for i, result in enumerate(perturbed_results):
+            if len(result.boxes) > 0:
+                for j in range(len(result.boxes)):
+                    detection = {
+                        'class_name': result.names[int(result.boxes.cls[j])],
+                        'confidence': float(result.boxes.conf[j]),
+                        'bbox': result.boxes.xyxy[j].cpu().numpy().tolist(),  # [x1, y1, x2, y2]
+                        'class_id': int(result.boxes.cls[j]),
+                        'detection_id': f"pert_{i}_{j}"
+                    }
+                    perturbed_detections.append(detection)
+        
+        # 4. 같은 객체 매칭 수행
+        print("Matching objects between original and perturbed images...")
+        matched_pairs = match_objects(original_detections, perturbed_detections)
+        
+        # 결과 저장 경로 설정
+        paths = get_project_paths()
+        output_dir = os.path.join(paths['static_perturbation_results'], project_name)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        
+        # 5. 결과 이미지들 저장 (모델 입력용 640x640만 저장)
+        original_path = os.path.join(output_dir, f'{timestamp}_original.jpg')
+        cv2.imwrite(original_path, cv2.cvtColor(original_img, cv2.COLOR_RGB2BGR))
+        
+        perturbed_path = os.path.join(output_dir, f'{timestamp}_perturbed.jpg')
+        cv2.imwrite(perturbed_path, cv2.cvtColor(perturbed_img, cv2.COLOR_RGB2BGR))
+        
+        # 원본 추론 결과 이미지 저장
+        original_inference_img = draw_detections(original_boxes, original_colors, original_names, original_img.copy())
+        original_inference_path = os.path.join(output_dir, f'{timestamp}_original_inference.jpg')
+        cv2.imwrite(original_inference_path, cv2.cvtColor(original_inference_img, cv2.COLOR_RGB2BGR))
+        
+        # 교란된 이미지 추론 결과 저장
+        perturbed_inference_img = draw_detections(perturbed_boxes, perturbed_colors, perturbed_names, perturbed_img.copy())
+        perturbed_inference_path = os.path.join(output_dir, f'{timestamp}_perturbed_inference.jpg')
+        cv2.imwrite(perturbed_inference_path, cv2.cvtColor(perturbed_inference_img, cv2.COLOR_RGB2BGR))
+        
+        # 6. 결과 데이터 구성
+        result_data = {
+            'original_image': f'perturbation_results/{project_name}/{timestamp}_original.jpg',
+            'perturbed_image': f'perturbation_results/{project_name}/{timestamp}_perturbed.jpg',
+            'original_inference_image': f'perturbation_results/{project_name}/{timestamp}_original_inference.jpg',
+            'perturbed_inference_image': f'perturbation_results/{project_name}/{timestamp}_perturbed_inference.jpg',
+            'original_detections': original_detections,
+            'perturbed_detections': perturbed_detections,
+            'matched_pairs': matched_pairs,
+            'perturbation_settings': {
+                'masking_type': masking_type,
+                'mask_points_count': len(mask_data),
+                'extra_perturbations': extra_perturbations
+            },
+            'file_name': timestamp
+        }
+        
+        # 결과 데이터를 JSON 파일로 저장
+        result_json_path = os.path.join(output_dir, f'{timestamp}_results.json')
+        with open(result_json_path, 'w') as f:
+            json.dump(result_data, f, indent=2)
+        
+        # 세션에 결과 저장
+        flask_session['perturbation_results'] = {
+            'images': [result_data],
+            'total_images': 1,
+            'project_name': project_name
+        }
+        
+        return jsonify({
+            'success': True,
+            'redirect_url': url_for('perturbation_result')
+        })
+        
+    except Exception as e:
+        print(f"Error in run_perturbation: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def calculate_iou(box1, box2):
+    """
+    두 바운딩 박스 간의 IoU를 계산하는 함수
+    
+    Args:
+        box1, box2: [x1, y1, x2, y2] 형식의 바운딩 박스
+    
+    Returns:
+        float: IoU 값 (0.0 ~ 1.0)
+    """
+    # 교집합 영역 계산
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+    
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+    
+    intersection = (x2 - x1) * (y2 - y1)
+    
+    # 합집합 영역 계산
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - intersection
+    
+    return intersection / union if union > 0 else 0.0
+
+def calculate_center_distance(box1, box2):
+    """
+    두 바운딩 박스의 중심점 간 거리를 계산하는 함수
+    
+    Args:
+        box1, box2: [x1, y1, x2, y2] 형식의 바운딩 박스
+    
+    Returns:
+        float: 중심점 간 유클리드 거리
+    """
+    center1_x = (box1[0] + box1[2]) / 2
+    center1_y = (box1[1] + box1[3]) / 2
+    center2_x = (box2[0] + box2[2]) / 2
+    center2_y = (box2[1] + box2[3]) / 2
+    
+    return np.sqrt((center1_x - center2_x)**2 + (center1_y - center2_y)**2)
+
+def match_objects(original_detections, perturbed_detections, iou_threshold=0.3, distance_threshold=100):
+    """
+    원본 이미지와 교란된 이미지의 객체들을 매칭하는 함수
+    
+    Args:
+        original_detections: 원본 이미지의 검출 결과 리스트
+        perturbed_detections: 교란된 이미지의 검출 결과 리스트
+        iou_threshold: IoU 매칭 임계값 (기본값: 0.3)
+        distance_threshold: 중심점 거리 임계값 (기본값: 100픽셀)
+    
+    Returns:
+        list: 매칭된 객체 쌍들의 리스트
+    """
+    matched_pairs = []
+    used_original = set()
+    used_perturbed = set()
+    
+    # 1단계: IoU 기반 매칭 (높은 우선순위)
+    for i, orig_det in enumerate(original_detections):
+        if i in used_original:
+            continue
+            
+        best_iou = 0
+        best_match_idx = -1
+        
+        for j, pert_det in enumerate(perturbed_detections):
+            if j in used_perturbed:
+                continue
+                
+            # 같은 클래스인 경우에만 매칭 시도
+            if orig_det['class_id'] == pert_det['class_id']:
+                iou = calculate_iou(orig_det['bbox'], pert_det['bbox'])
+                
+                if iou > best_iou and iou >= iou_threshold:
+                    best_iou = iou
+                    best_match_idx = j
+        
+        if best_match_idx != -1:
+            matched_pairs.append({
+                'original_detection': orig_det,
+                'perturbed_detection': perturbed_detections[best_match_idx],
+                'iou': best_iou,
+                'match_type': 'iou',
+                'confidence_change': perturbed_detections[best_match_idx]['confidence'] - orig_det['confidence']
+            })
+            used_original.add(i)
+            used_perturbed.add(best_match_idx)
+    
+    # 2단계: 중심점 거리 기반 매칭 (낮은 우선순위)
+    for i, orig_det in enumerate(original_detections):
+        if i in used_original:
+            continue
+            
+        best_distance = float('inf')
+        best_match_idx = -1
+        
+        for j, pert_det in enumerate(perturbed_detections):
+            if j in used_perturbed:
+                continue
+                
+            # 같은 클래스이고 신뢰도가 높은 경우에만 매칭 시도
+            if (orig_det['class_id'] == pert_det['class_id'] and 
+                pert_det['confidence'] > 0.5):  # 신뢰도 임계값
+                
+                distance = calculate_center_distance(orig_det['bbox'], pert_det['bbox'])
+                
+                if distance < best_distance and distance <= distance_threshold:
+                    best_distance = distance
+                    best_match_idx = j
+        
+        if best_match_idx != -1:
+            matched_pairs.append({
+                'original_detection': orig_det,
+                'perturbed_detection': perturbed_detections[best_match_idx],
+                'center_distance': best_distance,
+                'match_type': 'distance',
+                'confidence_change': perturbed_detections[best_match_idx]['confidence'] - orig_det['confidence']
+            })
+            used_original.add(i)
+            used_perturbed.add(best_match_idx)
+    
+    # 3단계: 매칭되지 않은 객체들 기록
+    unmatched_original = [i for i in range(len(original_detections)) if i not in used_original]
+    unmatched_perturbed = [i for i in range(len(perturbed_detections)) if i not in used_perturbed]
+    
+    print(f"Matched pairs: {len(matched_pairs)}")
+    print(f"Unmatched original: {len(unmatched_original)}")
+    print(f"Unmatched perturbed: {len(unmatched_perturbed)}")
+    
+    return {
+        'matched_pairs': matched_pairs,
+        'unmatched_original_indices': unmatched_original,
+        'unmatched_perturbed_indices': unmatched_perturbed,
+        'total_original': len(original_detections),
+        'total_perturbed': len(perturbed_detections)
+    }
+
+def apply_perturbation(image, mask_data, masking_type, extra_perturbations=None):
+    """
+    원본 이미지에서 선택된 영역에 마스킹 타입을 적용하고, 
+    Extra Perturbations가 활성화된 경우 추가 교란을 적용하는 함수
+    
+    Args:
+        image: 원본 이미지 (numpy array)
+        mask_data: 마스킹 영역 데이터 (list of dict with x, y coordinates)
+        masking_type: 마스킹 타입 ('black', 'white', 'gaussian', 'blur', 'inductive_bias')
+        extra_perturbations: 추가 교란 설정 (dict with brightness, rotation, scale values)
+    
+    Returns:
+        numpy array: 교란된 이미지
+    """
+    img = image.copy()
+    height, width = img.shape[:2]
+    
+    # 마스킹 영역을 위한 마스크 생성
+    mask = np.zeros((height, width), dtype=np.uint8)
+    
+    if len(mask_data) > 0:
+        # 마스킹 데이터를 numpy 배열로 변환
+        mask_points = np.array([[point['x'], point['y']] for point in mask_data], dtype=np.int32)
+        
+        print(f"Mask points shape: {mask_points.shape}")
+        print(f"Mask points sample: {mask_points[:3]}")
+        print(f"Image shape: {img.shape}")
+        
+        # 마스킹 영역을 채우기
+        cv2.fillPoly(mask, [mask_points], 255)
+        
+        # 마스크가 제대로 생성되었는지 확인
+        mask_area = np.sum(mask > 0)
+        print(f"Mask area: {mask_area} pixels")
+        
+        # 마스킹 타입에 따른 처리
+        if masking_type == 'black':
+            # 검은색으로 마스킹
+            img[mask > 0] = [0, 0, 0]
+            
+        elif masking_type == 'white':
+            # 흰색으로 마스킹
+            img[mask > 0] = [255, 255, 255]
+            
+        elif masking_type == 'gaussian':
+            # 가우시안 노이즈 적용
+            noise = np.random.normal(0, 50, img.shape).astype(np.uint8)
+            img[mask > 0] = np.clip(img[mask > 0] + noise[mask > 0], 0, 255)
+            
+        elif masking_type == 'blur':
+            # 블러 처리
+            blurred = cv2.GaussianBlur(img, (15, 15), 0)
+            img[mask > 0] = blurred[mask > 0]
+            
+        elif masking_type == 'inductive_bias':
+            # Inductive Bias: 마스킹된 영역을 이미지 전체에서 무작위 위치로 이동
+            mask_coords = np.where(mask > 0)
+            if len(mask_coords[0]) > 0:
+                # 마스킹된 영역의 바운딩 박스 계산
+                min_y, max_y = np.min(mask_coords[0]), np.max(mask_coords[0])
+                min_x, max_x = np.min(mask_coords[1]), np.max(mask_coords[1])
+                mask_height = max_y - min_y
+                mask_width = max_x - min_x
+                
+                # 무작위 위치 생성 (이미지 경계 내에서)
+                max_offset_x = width - mask_width
+                max_offset_y = height - mask_height
+                
+                if max_offset_x > 0 and max_offset_y > 0:
+                    # 무작위 오프셋 생성
+                    random_offset_x = np.random.randint(0, max_offset_x)
+                    random_offset_y = np.random.randint(0, max_offset_y)
+                    
+                    # 이동된 마스킹 영역 생성
+                    shifted_mask = np.zeros_like(mask)
+                    shifted_points = mask_points - np.array([min_x, min_y]) + np.array([random_offset_x, random_offset_y])
+                    shifted_points = np.clip(shifted_points, 0, [width-1, height-1])
+                    cv2.fillPoly(shifted_mask, [shifted_points.astype(np.int32)], 255)
+                    
+                    # 원본 영역을 검은색으로, 이동된 영역을 원본으로 복사
+                    img[mask > 0] = [0, 0, 0]
+                    img[shifted_mask > 0] = image[shifted_mask > 0]
+    
+    # Extra Perturbations 적용 (활성화된 경우에만)
+    if extra_perturbations and extra_perturbations.get('enabled', False):
+        # 밝기 조정
+        if 'brightness' in extra_perturbations:
+            brightness_value = extra_perturbations['brightness']
+            if brightness_value != 0:
+                factor = 1.0 + (brightness_value / 100.0)  # -1.0 ~ 2.0
+                img = cv2.convertScaleAbs(img, alpha=factor, beta=0)
+        
+        # 회전
+        if 'rotation' in extra_perturbations:
+            rotation_value = extra_perturbations['rotation']
+            if rotation_value != 0:
+                center = (width // 2, height // 2)
+                rotation_matrix = cv2.getRotationMatrix2D(center, rotation_value, 1.0)
+                img = cv2.warpAffine(img, rotation_matrix, (width, height))
+        
+        # 크기 조정
+        if 'scale' in extra_perturbations:
+            scale_value = extra_perturbations['scale']
+            if scale_value != 1.0:
+                new_height = int(height * scale_value)
+                new_width = int(width * scale_value)
+                img = cv2.resize(img, (new_width, new_height))
+                # 원래 크기로 다시 리사이즈
+                img = cv2.resize(img, (width, height))
+    
+    return img
+
+@app.route('/perturbation/result')
+def perturbation_result():
+    results = flask_session.get('perturbation_results', {})
+    if not results:
+        return redirect(url_for('perturbation_vis'))  # 결과가 없으면 업로드 페이지로 리다이렉트
+        
+    return render_template('perturbation_result.html',
+        images=results.get('images', []),
+        image_count=results.get('total_images', 0),
+        project_name=results.get('project_name', 'default_project')
+    )
+
+@app.route('/api/perturbation/project/list', methods=['GET'])
+def get_perturbation_project_list():
+    paths = get_project_paths()
+    base_dir = paths['static_perturbation_results']
+    projects = []
+    
+    if os.path.exists(base_dir):
+        for project_name in os.listdir(base_dir):
+            project_dir = os.path.join(base_dir, project_name)
+            if os.path.isdir(project_dir):
+                # 프로젝트 디렉토리에서 original 이미지들 찾기
+                original_images = []
+                for file in os.listdir(project_dir):
+                    if file.endswith('_original.jpg'):
+                        original_images.append({
+                            'filename': file,
+                            'path': f'perturbation_results/{project_name}/{file}'
+                        })
+                
+                if original_images:  # original 이미지가 있는 프로젝트만 포함
+                    # 가장 최근 이미지 사용
+                    latest_image = original_images[0]
+                    
+                    # 실제 파일 존재 여부 확인
+                    actual_file_path = os.path.join(project_dir, latest_image['filename'])
+                    if not os.path.exists(actual_file_path):
+                        print(f"Warning: File does not exist: {actual_file_path}")
+                        continue
+                    
+                    # 프로젝트 정보 구성 (기본값)
+                    project_info = {
+                        'name': project_name,
+                        'original_image': latest_image['path'],
+                        'original_detections': 0,
+                        'perturbed_detections': 0,
+                        'matched_objects': 0
+                    }
+                    
+                    # 결과 파일이 있다면 더 자세한 정보 로드
+                    result_files = [f for f in os.listdir(project_dir) if f.endswith('_original_inference.jpg')]
+                    if result_files:
+                        # 가장 최근 결과 파일 사용
+                        latest_result = result_files[0]
+                        base_name = latest_result.replace('_original_inference.jpg', '')
+                        
+                        # 결과 데이터 파일 확인 (JSON 형태로 저장된 경우)
+                        result_data_file = os.path.join(project_dir, f'{base_name}_results.json')
+                        if os.path.exists(result_data_file):
+                            try:
+                                with open(result_data_file, 'r') as f:
+                                    result_data = json.load(f)
+                                    if 'original_detections' in result_data:
+                                        project_info['original_detections'] = len(result_data['original_detections'])
+                                    if 'perturbed_detections' in result_data:
+                                        project_info['perturbed_detections'] = len(result_data['perturbed_detections'])
+                                    if 'matched_pairs' in result_data:
+                                        project_info['matched_objects'] = len(result_data['matched_pairs']['matched_pairs'])
+                            except:
+                                pass
+                    
+                    projects.append(project_info)
+    
+    print(f"Returning {len(projects)} projects")
+    for project in projects:
+        print(f"Project: {project['name']}, Image: {project['original_image']}")
+    
+    return jsonify({'projects': projects})
+
+@app.route('/api/perturbation/project/load', methods=['POST'])
+def load_existing_perturbation_project():
+    data = request.json
+    project_name = data.get('project_name', '')
+    
+    if not project_name:
+        return jsonify({'error': 'Project name is required'}), 400
+    
+    # 프로젝트 경로 가져오기
+    paths = get_project_paths()
+    project_dir = os.path.join(paths['static_perturbation_results'], project_name)
+    if not os.path.exists(project_dir):
+        return jsonify({'error': 'Project not found'}), 404
+    
+    # 프로젝트 디렉토리에서 결과 파일들 찾기
+    result_files = [f for f in os.listdir(project_dir) if f.endswith('_original_inference.jpg')]
+    if not result_files:
+        return jsonify({'error': 'No results found for this project'}), 404
+    
+    # 가장 최근 결과 파일 사용
+    latest_result = result_files[0]
+    base_name = latest_result.replace('_original_inference.jpg', '')
+    
+    # 관련 파일들 확인
+    original_file = f'{base_name}_original.jpg'
+    perturbed_file = f'{base_name}_perturbed.jpg'
+    original_inference_file = f'{base_name}_original_inference.jpg'
+    perturbed_inference_file = f'{base_name}_perturbed_inference.jpg'
+    
+    # 결과 구성
+    result_data = {
+        'original_image': f'perturbation_results/{project_name}/{original_file}',
+        'perturbed_image': f'perturbation_results/{project_name}/{perturbed_file}',
+        'original_inference_image': f'perturbation_results/{project_name}/{original_inference_file}',
+        'perturbed_inference_image': f'perturbation_results/{project_name}/{perturbed_inference_file}',
+        'original_detections': [],
+        'perturbed_detections': [],
+        'matched_pairs': {
+            'matched_pairs': [],
+            'unmatched_original_indices': [],
+            'unmatched_perturbed_indices': [],
+            'total_original': 0,
+            'total_perturbed': 0
+        },
+        'perturbation_settings': {
+            'masking_type': 'unknown',
+            'mask_points_count': 0,
+            'extra_perturbations': {'enabled': False}
+        },
+        'file_name': base_name
+    }
+    
+    # 결과 데이터 파일 확인
+    result_data_file = os.path.join(project_dir, f'{base_name}_results.json')
+    if os.path.exists(result_data_file):
+        try:
+            with open(result_data_file, 'r') as f:
+                saved_data = json.load(f)
+                # 저장된 데이터로 업데이트
+                result_data.update(saved_data)
+        except:
+            pass
+    
+    # 세션에 결과 저장
+    flask_session['perturbation_results'] = {
+        'images': [result_data],
+        'total_images': 1,
+        'project_name': project_name
+    }
+    
+    return jsonify({
+        'success': True,
+        'redirect_url': url_for('perturbation_result')
+    })
+
+@app.route('/api/perturbation/project/delete', methods=['POST'])
+def delete_perturbation_project():
+    try:
+        data = request.json
+        if not data:
+            raise ValueError("No JSON data received")
+            
+        project_name = data.get('project_name')
+        if not project_name:
+            raise ValueError("No project_name provided in request")
+            
+        print(f"Attempting to delete perturbation project: {project_name}")
+        
+        # 프로젝트 디렉토리 경로 확인
+        paths = get_project_paths()
+        project_dir = os.path.join(paths['static_perturbation_results'], project_name)
+        
+        if os.path.exists(project_dir):
+            shutil.rmtree(project_dir)
+            print(f"Deleted perturbation project directory: {project_dir}")
+            return jsonify({'message': f'Project "{project_name}" deleted successfully'})
+        else:
+            return jsonify({'message': f'Project "{project_name}" not found'}), 404
+            
+    except ValueError as e:
+        error_msg = f"Invalid request: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 400
+    except Exception as e:
+        error_msg = f"Error deleting perturbation project: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 500
 
 # @socketio.on('check_fiftyone_ready')
 # def handle_check_fiftyone_ready():

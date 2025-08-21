@@ -15,6 +15,7 @@ class Config:
         self.datasets_exported = self.flask_webapp_dir / "datasets" / "exported_datasets"
         self.logs_dir = self.flask_webapp_dir / "logs"
         self.static_cam_results = self.flask_webapp_dir / "static" / "cam_results"
+        self.static_perturbation_results = self.flask_webapp_dir / "static" / "perturbation_results"
         
         # 데이터베이스 설정
         self.milvus_db_name = "DAE_data.db"
@@ -45,7 +46,8 @@ class Config:
             self.datasets_uploads,
             self.datasets_exported,
             self.logs_dir,
-            self.static_cam_results
+            self.static_cam_results,
+            self.static_perturbation_results
         ]
         
         for directory in directories:
@@ -64,7 +66,8 @@ class Config:
             'datasets_uploads': str(self.datasets_uploads),
             'datasets_exported': str(self.datasets_exported),
             'logs_dir': str(self.logs_dir),
-            'static_cam_results': str(self.static_cam_results)
+            'static_cam_results': str(self.static_cam_results),
+            'static_perturbation_results': str(self.static_perturbation_results)
         }
     
     def get_fiftyone_manager(self):
