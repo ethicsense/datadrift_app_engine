@@ -414,7 +414,7 @@ class ImageAnalysisReport:
                 else:
                     print(f"  ⚠️  Representative image {filename} not found in XAI data")
             
-            print(f"🎨 Generated {len(visualizations)} XAI visualizations from {len(representative_images)} representative images")
+            print(f"🎨 Generated {len(visualizations)} XAI visualizations from {len(representative_images)} representative image")
             return visualizations
             
         except ImportError:
@@ -425,87 +425,27 @@ class ImageAnalysisReport:
             return {}
     
     def _select_representative_images(self):
-        """클러스터별 대표 이미지를 선택합니다."""
+        """전체 샘플 중 하나의 대표 이미지를 선택합니다."""
         representative_images = []
         
-        print(f"  🔍 Checking clustering data...")
-        print(f"    - clustering_data exists: {hasattr(self, 'clustering_data')}")
-        print(f"    - clustering_data content: {len(self.clustering_data) if hasattr(self, 'clustering_data') and self.clustering_data else 0} items")
+        print(f"  🔍 Selecting single representative image from all samples...")
         
-        # 클러스터링 데이터가 있는 경우
-        if hasattr(self, 'clustering_data') and self.clustering_data:
-            try:
-                # 클러스터별로 대표 이미지 선택
-                cluster_groups = {}
-                
-                # 클러스터링 데이터 구조 확인
-                # print(f"    - Clustering data type: {type(self.clustering_data)}")
-                # print(f"    - Clustering data keys: {list(self.clustering_data.keys()) if isinstance(self.clustering_data, dict) else 'Not a dict'}")
-                
-                # 클러스터 정보 추출 (세 가지 구조 지원)
-                if isinstance(self.clustering_data, dict):
-                    # 구조 1: 클러스터링 분석 결과 구조
-                    if 'cluster_labels' in self.clustering_data and 'file_names' in self.clustering_data:
-                        print(f"    - Found clustering analysis structure with {len(self.clustering_data['file_names'])} files")
-                        cluster_labels = self.clustering_data['cluster_labels']
-                        file_names = self.clustering_data['file_names']
-                        
-                        for i, (label, filename) in enumerate(zip(cluster_labels, file_names)):
-                            cluster_id = label
-                            if cluster_id not in cluster_groups:
-                                cluster_groups[cluster_id] = []
-                            cluster_groups[cluster_id].append(filename)
-                    
-                    # 구조 2: {filename: {cluster: id, embedding: [...]}}
-                    elif any(isinstance(v, dict) and 'cluster' in v for v in self.clustering_data.values()):
-                        for filename, cluster_info in self.clustering_data.items():
-                            if isinstance(cluster_info, dict) and 'cluster' in cluster_info:
-                                cluster_id = cluster_info['cluster']
-                                if cluster_id not in cluster_groups:
-                                    cluster_groups[cluster_id] = []
-                                cluster_groups[cluster_id].append(filename)
-                    
-                    # 구조 3: {filename: cluster_id}
-                    elif any(isinstance(v, int) for v in self.clustering_data.values()):
-                        for filename, cluster_id in self.clustering_data.items():
-                            if isinstance(cluster_id, int):
-                                if cluster_id not in cluster_groups:
-                                    cluster_groups[cluster_id] = []
-                                cluster_groups[cluster_id].append(filename)
-                
-                print(f"    - Found {len(cluster_groups)} clusters: {list(cluster_groups.keys())}")
-                
-                # 각 클러스터에서 무작위 대표 이미지 선택
+        # XAI 데이터가 있는 파일들만 필터링
+        if self.xai_data:
+            xai_available_files = list(self.xai_data.keys())
+            print(f"    - Found {len(xai_available_files)} files with XAI data")
+            
+            if xai_available_files:
+                # 무작위로 하나의 대표 이미지 선택
                 import random
-                print()
-                for cluster_id, filenames in cluster_groups.items():
-                    # XAI 데이터가 있는 파일들만 필터링
-                    xai_available_files = [f for f in filenames if f in self.xai_data]
-                    
-                    if xai_available_files:
-                        # 무작위로 대표 이미지 선택
-                        selected_file = random.choice(xai_available_files)
-                        representative_images.append(selected_file)
-                        print(f"  📊 Selected random representative for cluster {cluster_id}: {selected_file}")
-                    else:
-                        print(f"  ⚠️  No XAI data available for cluster {cluster_id}")
-                
-                print(f"  📊 Selected {len(representative_images)} representative images from {len(cluster_groups)} clusters")
-                print()
-                
-            except Exception as e:
-                print(f"  ⚠️  Error selecting representative images: {e}")
-                # 오류 발생 시 처음 3개 이미지만 선택
-                if self.xai_data:
-                    representative_images = list(self.xai_data.keys())[:3]
-                    print(f"  📊 Fallback: Selected first 3 images as representatives")
-        else:
-            # 클러스터링 데이터가 없는 경우 처음 3개 이미지만 선택
-            if self.xai_data:
-                representative_images = list(self.xai_data.keys())[:3]
-                print(f"  📊 No clustering data found. Selected first 3 images as representatives")
+                selected_file = random.choice(xai_available_files)
+                representative_images.append(selected_file)
+                print(f"  📊 Selected single representative image: {selected_file}")
+                print(f"  📊 Total XAI files available: {len(xai_available_files)}")
             else:
                 print(f"  ⚠️  No XAI data available for representative selection")
+        else:
+            print(f"  ⚠️  No XAI data available for representative selection")
         
         return representative_images
     
@@ -532,11 +472,11 @@ class ImageAnalysisReport:
         detected_classes = {}
         model_info = {}
         
-        # 대표 이미지 정보 (클러스터링 기반)
+        # 대표 이미지 정보 (단일 대표 이미지)
         representative_info = {
-            'total_clusters': 0,
-            'representative_images': 0,
-            'cluster_coverage': 0.0
+            'total_samples': total_xai_files,
+            'representative_images': 1,
+            'sample_coverage': 1.0 / total_xai_files if total_xai_files > 0 else 0.0
         }
         
         for filename, xai_result in self.xai_data.items():
@@ -584,14 +524,8 @@ class ImageAnalysisReport:
                     elif num_components <= 2:
                         quality_metrics['simple_components'] += 1
         
-        # 클러스터링 정보 (대표 이미지 선택 기준)
-        if hasattr(self, 'clustering_data') and self.clustering_data:
-            if 'cluster_labels' in self.clustering_data:
-                unique_clusters = len(set(self.clustering_data['cluster_labels']))
-                representative_info['total_clusters'] = unique_clusters
-                # 대표 이미지 수는 클러스터 수와 동일 (이미 선택된 대표 이미지 수 사용)
-                representative_info['representative_images'] = unique_clusters
-                representative_info['cluster_coverage'] = 100.0  # 모든 클러스터에서 대표 이미지 선택
+        # 단일 대표 이미지 정보 (클러스터링과 무관하게)
+        # representative_info는 이미 위에서 설정됨
         
         # 품질 요약
         quality_summary = {
@@ -1012,9 +946,9 @@ class ImageAnalysisReport:
                         <small style="color: #6c757d;">> 5 components</small>
                     </div>
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Representative Images</h5>
+                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Representative Image</h5>
                         <div style="font-size: 1.8em; font-weight: bold; color: #17a2b8;">{xai_summary.get('representative_info', {}).get('representative_images', 0):,}</div>
-                        <small style="color: #6c757d;">from {xai_summary.get('representative_info', {}).get('total_clusters', 0)} clusters</small>
+                        <small style="color: #6c757d;">from {xai_summary.get('representative_info', {}).get('total_samples', 0):,} total samples</small>
                     </div>
                 </div>
             </div>
