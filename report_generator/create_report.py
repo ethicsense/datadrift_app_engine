@@ -291,16 +291,13 @@ class ImageAnalysisReport:
             scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
                                 c=cluster_labels, cmap='viridis', alpha=0.6)
             
-            # 클러스터 중심점 표시 (centroids 사용)
+            # 클러스터 중심점 표시 (2D 센트로이드 직접 사용)
             if 'centroids' in self.clustering_data and self.clustering_data['centroids']:
-                centroids = np.array(self.clustering_data['centroids'])
-                # PCA를 사용하여 2D로 변환
-                pca_components = np.array(self.clustering_data['pca_components'])
-                centroids_2d = centroids @ pca_components.T
+                centroids_2d = np.array(self.clustering_data['centroids'])
                 plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], 
                            c='red', marker='x', s=200, linewidths=3, label='Cluster Centroids')
             
-            plt.title(f'Clustering Results - {method.upper()} ({n_clusters} clusters)', fontsize=14, fontweight='bold')
+            plt.title(f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids', fontsize=14, fontweight='bold')
             plt.xlabel('PC1')
             plt.ylabel('PC2')
             plt.colorbar(scatter, label='Cluster')

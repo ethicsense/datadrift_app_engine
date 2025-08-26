@@ -117,8 +117,13 @@ class EmbeddingAnalyzer:
         # 클러스터링 수행
         clustering_result = self._apply_clustering(embeddings_2d, method, n_clusters, cluster_selection_method)
         
-        # Centroid 계산 및 유사도 점수 계산
-        centroids, centroid_similarities = self._calculate_centroids_and_similarities(
+        # Centroid 계산 및 유사도 점수 계산 (2D 공간에서 계산)
+        centroids_2d, centroid_similarities = self._calculate_centroids_and_similarities_2d(
+            embeddings_2d, clustering_result['labels'], clustering_result['n_clusters']
+        )
+        
+        # 원본 고차원 공간에서도 센트로이드 계산 (유사도 계산용)
+        centroids_high_dim, _ = self._calculate_centroids_and_similarities(
             embeddings_array, clustering_result['labels'], clustering_result['n_clusters']
         )
         
@@ -136,7 +141,8 @@ class EmbeddingAnalyzer:
             'pca_components': pca.components_.tolist(),
             'pca_explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
             'cluster_stats': cluster_stats,
-            'centroids': centroids.tolist(),
+            'centroids': centroids_2d.tolist(),  # 2D 센트로이드 사용
+            'centroids_high_dim': centroids_high_dim.tolist(),  # 고차원 센트로이드도 저장
             'centroid_similarities': centroid_similarities
         }
         
@@ -157,7 +163,8 @@ class EmbeddingAnalyzer:
             'n_clusters': clustering_result['n_clusters'],
             'total_samples': len(embeddings_data),
             'cluster_stats': cluster_stats,
-            'centroids': centroids,
+            'centroids': centroids_2d,  # 2D 센트로이드 반환
+            'centroids_high_dim': centroids_high_dim,  # 고차원 센트로이드도 반환
             'centroid_similarities': centroid_similarities
         }
     
@@ -245,6 +252,7 @@ class EmbeddingAnalyzer:
     def _calculate_centroids_and_similarities(self, embeddings_array, cluster_labels, n_clusters):
         """
         각 클러스터의 centroid를 계산하고 centroid 기준 유사도 점수를 계산합니다.
+        코사인 밀도 가중 방식을 사용하여 임베딩 벡터에 최적화된 센트로이드를 계산합니다.
         
         Args:
             embeddings_array: 임베딩 배열
@@ -262,24 +270,177 @@ class EmbeddingAnalyzer:
             cluster_indices = np.where(cluster_labels == i)[0]
             
             if len(cluster_indices) > 0:
-                # 클러스터 i의 centroid 계산 (평균)
+                # 클러스터 i의 centroid 계산 (코사인 밀도 가중 방식)
                 cluster_embeddings = embeddings_array[cluster_indices]
-                centroids[i] = np.mean(cluster_embeddings, axis=0)
+                centroids[i] = self._calculate_cosine_density_weighted_centroid(cluster_embeddings)
                 
-                # 각 샘플과 centroid 간의 유사도 계산
-                similarities = []
-                for idx in cluster_indices:
-                    sample_embedding = embeddings_array[idx]
-                    similarity = self._calculate_cosine_similarity(sample_embedding, centroids[i])
-                    similarities.append(similarity)
-                
-                centroid_similarities[f'cluster_{i}'] = similarities
+                # 각 샘플과 centroid 간의 유사도 계산 (벡터화된 연산으로 최적화)
+                similarities = self._calculate_batch_cosine_similarities(cluster_embeddings, centroids[i])
+                centroid_similarities[f'cluster_{i}'] = similarities.tolist()
             else:
                 # 빈 클러스터인 경우
                 centroids[i] = np.zeros(embeddings_array.shape[1])
                 centroid_similarities[f'cluster_{i}'] = []
         
         return centroids, centroid_similarities
+    
+    def _calculate_cosine_density_weighted_centroid(self, cluster_embeddings):
+        """
+        코사인 유사도 기반 밀도 가중 센트로이드를 계산합니다.
+        임베딩 벡터의 방향적 특성을 고려하여 데이터 밀집 영역에 센트로이드를 위치시킵니다.
+        
+        Args:
+            cluster_embeddings: 클러스터 내 임베딩 벡터들 (n_samples, n_features)
+        
+        Returns:
+            np.ndarray: 밀도 가중 센트로이드 벡터
+        """
+        n_samples = len(cluster_embeddings)
+        
+        if n_samples == 0:
+            return np.zeros(cluster_embeddings.shape[1])
+        elif n_samples == 1:
+            return cluster_embeddings[0]
+        
+        # 벡터화된 코사인 유사도 행렬 계산
+        # cluster_embeddings @ cluster_embeddings.T = (n_samples, n_samples) 유사도 행렬
+        similarity_matrix = np.dot(cluster_embeddings, cluster_embeddings.T)
+        
+        # 대각선 요소 제거 (자기 자신과의 유사도)
+        np.fill_diagonal(similarity_matrix, 0)
+        
+        # 각 점의 평균 유사도를 밀도 가중치로 사용
+        weights = np.mean(similarity_matrix, axis=1)
+        
+        # 가중치가 모두 0인 경우 처리 (수치 안정성)
+        if np.sum(weights) == 0:
+            # 균등 가중치 사용
+            weights = np.ones(n_samples) / n_samples
+        
+        # 가중 평균 계산
+        weighted_centroid = np.average(cluster_embeddings, axis=0, weights=weights)
+        
+        # L2 정규화 (임베딩 벡터 특성 유지)
+        norm = np.linalg.norm(weighted_centroid)
+        if norm > 0:
+            weighted_centroid = weighted_centroid / norm
+        
+        return weighted_centroid
+    
+    def _calculate_batch_cosine_similarities(self, embeddings, centroid):
+        """
+        배치 단위로 코사인 유사도를 계산하여 성능을 최적화합니다.
+        
+        Args:
+            embeddings: 임베딩 벡터들 (n_samples, n_features)
+            centroid: 센트로이드 벡터 (n_features,)
+        
+        Returns:
+            np.ndarray: 각 임베딩과 센트로이드 간의 코사인 유사도 (n_samples,)
+        """
+        # 이미 정규화된 벡터라고 가정하므로 직접 내적 계산
+        similarities = np.dot(embeddings, centroid)
+        
+        # 수치 안정성을 위한 클리핑
+        similarities = np.clip(similarities, -1.0, 1.0)
+        
+        return similarities
+    
+    def _calculate_centroids_and_similarities_2d(self, embeddings_2d, cluster_labels, n_clusters):
+        """
+        2D 공간에서 센트로이드를 계산하고 유사도 점수를 계산합니다.
+        시각화에 최적화된 센트로이드 위치를 제공합니다.
+        
+        Args:
+            embeddings_2d: 2D로 축소된 임베딩 배열
+            cluster_labels: 클러스터 레이블
+            n_clusters: 클러스터 수
+        
+        Returns:
+            tuple: (centroids_2d, centroid_similarities)
+        """
+        centroids_2d = np.zeros((n_clusters, 2))  # 2D 공간
+        centroid_similarities = {}
+        
+        for i in range(n_clusters):
+            # 클러스터 i에 속한 샘플들의 인덱스
+            cluster_indices = np.where(cluster_labels == i)[0]
+            
+            if len(cluster_indices) > 0:
+                # 클러스터 i의 2D 센트로이드 계산 (유클리드 거리 기반)
+                cluster_embeddings_2d = embeddings_2d[cluster_indices]
+                
+                # 2D 공간에서는 유클리드 거리 기반 밀도 가중 센트로이드 사용
+                centroids_2d[i] = self._calculate_euclidean_density_weighted_centroid_2d(cluster_embeddings_2d)
+                
+                # 각 샘플과 센트로이드 간의 유사도 계산 (유클리드 거리 기반)
+                similarities = self._calculate_euclidean_similarities_2d(cluster_embeddings_2d, centroids_2d[i])
+                centroid_similarities[f'cluster_{i}'] = similarities.tolist()
+            else:
+                # 빈 클러스터인 경우
+                centroids_2d[i] = np.zeros(2)
+                centroid_similarities[f'cluster_{i}'] = []
+        
+        return centroids_2d, centroid_similarities
+    
+    def _calculate_euclidean_density_weighted_centroid_2d(self, cluster_embeddings_2d):
+        """
+        2D 공간에서 유클리드 거리 기반 밀도 가중 센트로이드를 계산합니다.
+        
+        Args:
+            cluster_embeddings_2d: 2D 클러스터 임베딩들 (n_samples, 2)
+        
+        Returns:
+            np.ndarray: 2D 밀도 가중 센트로이드 (2,)
+        """
+        n_samples = len(cluster_embeddings_2d)
+        
+        if n_samples == 0:
+            return np.zeros(2)
+        elif n_samples == 1:
+            return cluster_embeddings_2d[0]
+        
+        # 각 점의 밀도 가중치 계산 (유클리드 거리 기반)
+        weights = np.zeros(n_samples)
+        
+        for i in range(n_samples):
+            # 다른 모든 점들과의 유클리드 거리 계산
+            distances = np.linalg.norm(cluster_embeddings_2d - cluster_embeddings_2d[i], axis=1)
+            # 자기 자신과의 거리는 제외
+            distances[i] = np.inf
+            
+            # 거리의 역수를 밀도 가중치로 사용 (가까울수록 높은 가중치)
+            weights[i] = np.sum(1.0 / (distances + 1e-8))  # 수치 안정성
+        
+        # 가중치가 모두 0인 경우 처리
+        if np.sum(weights) == 0:
+            weights = np.ones(n_samples) / n_samples
+        
+        # 가중 평균 계산
+        weighted_centroid = np.average(cluster_embeddings_2d, axis=0, weights=weights)
+        
+        return weighted_centroid
+    
+    def _calculate_euclidean_similarities_2d(self, embeddings_2d, centroid_2d):
+        """
+        2D 공간에서 유클리드 거리 기반 유사도를 계산합니다.
+        
+        Args:
+            embeddings_2d: 2D 임베딩 벡터들 (n_samples, 2)
+            centroid_2d: 2D 센트로이드 (2,)
+        
+        Returns:
+            np.ndarray: 유사도 점수들 (높을수록 유사)
+        """
+        # 유클리드 거리 계산
+        distances = np.linalg.norm(embeddings_2d - centroid_2d, axis=1)
+        
+        # 거리를 유사도로 변환 (거리가 가까울수록 높은 유사도)
+        # 가우시안 커널 사용
+        similarities = np.exp(-distances / np.std(distances) if np.std(distances) > 0 else 1.0)
+        
+        return similarities
+    
     
     def _find_optimal_clusters_silhouette(self, embeddings_2d):
         """
