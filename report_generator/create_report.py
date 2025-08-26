@@ -603,6 +603,14 @@ class ImageAnalysisReport:
         # HTML 파트들을 동적으로 생성
         html_parts = []
         
+        # ===== 속성 및 임베딩 분석 섹션 시작 =====
+        html_parts.append("""
+        <div style="margin-bottom: 40px; padding: 25px; background: #f8f9fa; border-radius: 12px; border: 2px solid #e9ecef;">
+            <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #007bff; font-size: 1.6em;">
+                🖼️ Image Analysis Results (속성 및 임베딩 분석)
+            </h2>
+        """)
+        
         # 1. 요약 통계 섹션 (항상 존재)
         html_parts.append(f"""
         <div style="margin-bottom: 20px;">
@@ -910,6 +918,12 @@ class ImageAnalysisReport:
             </div>
                 """)
         
+        # ===== 속성 및 임베딩 분석 섹션 종료 =====
+        html_parts.append("""
+        </div>
+        """)
+        
+        # ===== XAI 분석 섹션 시작 =====
         # 9. XAI 분석 결과 섹션 (XAI 데이터가 있는 경우)
         if xai_summary or xai_charts:
             print(f"🎨 Adding XAI section with {len(xai_charts)} visualizations and summary stats")
@@ -918,15 +932,17 @@ class ImageAnalysisReport:
             
         if xai_summary or xai_charts:
             html_parts.append("""
-        <div style="margin-bottom: 30px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 XAI (Explainable AI) Analysis Results</h3>
+        <div style="margin-bottom: 40px; padding: 25px; background: #fff3cd; border-radius: 12px; border: 2px solid #ffc107;">
+            <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #ffc107; font-size: 1.6em;">
+                🧠 XAI (Explainable AI) Analysis Results
+            </h2>
         """)
             
             # XAI 요약 통계 추가
             if xai_summary:
                 html_parts.append(f"""
-            <div style="margin-bottom: 20px;">
-                <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid #dee2e6;">📊 XAI Analysis Summary</h4>
+            <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; border: 1px solid #dee2e6;">
+                <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">📊 XAI Analysis Summary</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
                         <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Files Analyzed</h5>
@@ -1010,8 +1026,8 @@ class ImageAnalysisReport:
                     icon = "📄"
                 
                 html_parts.append(f"""
-            <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e9ecef;">
-                <h4 style="color: #495057; margin-bottom: 15px; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">
+            <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 10px; border: 2px solid #ffc107;">
+                <h4 style="color: #495057; margin-bottom: 15px; border-bottom: 2px solid #ffc107; padding-bottom: 8px;">
                     {icon} {display_filename}
                 </h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
@@ -1049,7 +1065,7 @@ class ImageAnalysisReport:
                         viz_data = viz_types[viz_type]
                         title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
                         html_parts.append(f"""
-                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
                         <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
                         <div style="text-align: center;">
                             <img src="data:image/png;base64,{viz_data}" 
@@ -1063,7 +1079,7 @@ class ImageAnalysisReport:
                     if viz_type not in desired_order:
                         title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
                         html_parts.append(f"""
-                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
                         <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
                         <div style="text-align: center;">
                             <img src="data:image/png;base64,{viz_data}" 
@@ -1080,6 +1096,8 @@ class ImageAnalysisReport:
             html_parts.append("""
         </div>
             """)
+        
+        # ===== XAI 분석 섹션 종료 =====
         
         return ''.join(html_parts)
 
