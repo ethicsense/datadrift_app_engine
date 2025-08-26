@@ -78,7 +78,7 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
     
     # 이미지 분석 섹션 (항상 표시, 데이터가 없으면 안내 메시지)
     sections.append(f"""
-    <div class="section">
+    <div class="section" style="margin-bottom: 40px;">
         {image_analysis_content}
     </div>
     """)
@@ -129,14 +129,14 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
                                 .title {{ font-size: 2em; margin-bottom: 5px; }}
                                 .subtitle {{ font-size: 1.1em; opacity: 0.9; }}
                                 .section {{ 
-                                    margin: 25px 0; padding: 20px; 
-                                    border: 1px solid #e9ecef; border-radius: 8px;
-                                    background: white;
+                                    margin: 30px 0; padding: 25px; 
+                                    border: 2px solid #e9ecef; border-radius: 12px;
+                                    background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                                 }}
                                 .section-title {{ 
-                                    font-size: 1.4em; color: #495057; 
-                                    margin-bottom: 15px; padding-bottom: 8px;
-                                    border-bottom: 2px solid #dee2e6;
+                                    font-size: 1.5em; color: #495057; 
+                                    margin-bottom: 20px; padding-bottom: 12px;
+                                    border-bottom: 3px solid #007bff; font-weight: bold;
                                 }}
                                 table {{ 
                                     width: 100%; border-collapse: collapse; margin: 15px 0;
