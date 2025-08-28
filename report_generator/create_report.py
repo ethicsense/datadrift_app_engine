@@ -966,30 +966,21 @@ class ImageAnalysisReport:
                 </div>
             </div>
                 """)
-                
-
             
-            # XAI 시각화들을 파일별로 그룹화
-            file_groups = {}
+            # XAI 시각화들을 시각화 타입별로 그룹화 (단일 대표 이미지)
+            viz_types = {}
             for key, viz_data in xai_charts.items():
-                # 키 형식: "filename_viztype" (파일명에 언더스코어가 포함될 수 있음)
-                # 예: "carnorm_2_cam_heatmap" -> filename="carnorm_2", viz_type="cam_heatmap"
-                
-                # 알려진 시각화 타입들을 찾아서 파일명과 분리
+                # 키 형식: "filename_viztype"에서 시각화 타입 추출
                 known_viz_types = [
                     'cam_heatmap', 'cam_threshold_analysis', 'cam_distribution_analysis',
                     'cam_statistics', 'connected_components', 'entropy_analysis',
                     'centroid_analysis', 'overlap_analysis', 'overlap_statistics'
                 ]
                 
-                filename = key
                 viz_type = None
-                
                 # 알려진 시각화 타입으로 끝나는지 확인
                 for viz_type_name in known_viz_types:
                     if key.endswith(f'_{viz_type_name}'):
-                        # 마지막 언더스코어를 기준으로 분리
-                        filename = key[:-len(f'_{viz_type_name}')]
                         viz_type = viz_type_name
                         break
                 
@@ -997,101 +988,81 @@ class ImageAnalysisReport:
                 if viz_type is None:
                     parts = key.split('_', 1)
                     if len(parts) == 2:
-                        filename, viz_type = parts
+                        viz_type = parts[1]
                     else:
-                        # 분리할 수 없는 경우 전체를 파일명으로 사용
-                        filename = key
                         viz_type = 'unknown'
                 
-                if filename not in file_groups:
-                    file_groups[filename] = {}
-                file_groups[filename][viz_type] = viz_data
+                viz_types[viz_type] = viz_data
             
-            # 각 파일별로 XAI 결과 표시
-            for filename, viz_types in file_groups.items():
-                # 파일명을 더 명확하게 표시 (확장자 포함)
-                display_filename = filename
-                if '.' in filename:
-                    # 확장자가 있는 경우 파일 타입 아이콘 추가
-                    ext = filename.split('.')[-1].lower()
-                    if ext in ['jpg', 'jpeg']:
-                        icon = "🖼️"
-                    elif ext == 'png':
-                        icon = "🖼️"
-                    elif ext in ['bmp', 'tiff', 'tif']:
-                        icon = "🖼️"
-                    else:
-                        icon = "📄"
-                else:
-                    icon = "📄"
-                
-                html_parts.append(f"""
+            # XAI 분석 결과 컨테이너 시작
+            html_parts.append(f"""
             <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 10px; border: 2px solid #ffc107;">
                 <h4 style="color: #495057; margin-bottom: 15px; border-bottom: 2px solid #ffc107; padding-bottom: 8px;">
-                    {icon} {display_filename}
+                    🔬 Representative Sample Report
                 </h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
-                """)
-                
-                # 시각화 타입별 제목 매핑
-                viz_titles = {
-                    'cam_heatmap': '🔥 CAM Heatmap',
-                    'cam_threshold_analysis': '🎯 Threshold Analysis',
-                    'cam_distribution_analysis': '📊 Distribution Analysis',
-                    'cam_statistics': '📈 CAM Statistics',
-                    'connected_components': '🔗 Connected Components Analysis',
-                    'entropy_analysis': '📊 Entropy Analysis',
-                    'centroid_analysis': '🎯 Centroid Analysis',
-                    'overlap_analysis': '🔍 Overlap Analysis',
-                    'overlap_statistics': '📊 Overlap Statistics'
-                }
-                
-                # 원하는 순서로 시각화 타입 정렬
-                desired_order = [
-                    'cam_heatmap',
-                    'cam_statistics',
-                    'cam_threshold_analysis',
-                    'connected_components',
-                    'entropy_analysis',
-                    'centroid_analysis',
-                    'overlap_analysis',
-                    'overlap_statistics',
-                    'cam_distribution_analysis'  # 기타 타입들은 마지막에
-                ]
-                
-                # 정렬된 순서로 시각화 출력
-                for viz_type in desired_order:
-                    if viz_type in viz_types:
-                        viz_data = viz_types[viz_type]
-                        title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
-                        html_parts.append(f"""
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                        <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
-                        <div style="text-align: center;">
-                            <img src="data:image/png;base64,{viz_data}" 
-                                 style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        </div>
+            """)
+            
+            # 시각화 타입별 제목 매핑
+            viz_titles = {
+                'cam_heatmap': '🔥 CAM Heatmap',
+                'cam_threshold_analysis': '🎯 Threshold Analysis',
+                'cam_distribution_analysis': '📊 Distribution Analysis',
+                'cam_statistics': '📈 CAM Statistics',
+                'connected_components': '🔗 Connected Components Analysis',
+                'entropy_analysis': '📊 Entropy Analysis',
+                'centroid_analysis': '🎯 Centroid Analysis',
+                'overlap_analysis': '🔍 Overlap Analysis',
+                'overlap_statistics': '📊 Overlap Statistics'
+            }
+            
+            # 원하는 순서로 시각화 타입 정렬
+            desired_order = [
+                'cam_heatmap',
+                'cam_statistics',
+                'cam_threshold_analysis',
+                'connected_components',
+                'entropy_analysis',
+                'centroid_analysis',
+                'overlap_analysis',
+                'overlap_statistics',
+                'cam_distribution_analysis'  # 기타 타입들은 마지막에
+            ]
+            
+            # 정렬된 순서로 시각화 출력
+            for viz_type in desired_order:
+                if viz_type in viz_types:
+                    viz_data = viz_types[viz_type]
+                    title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
+                    html_parts.append(f"""
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
+                    <div style="text-align: center;">
+                        <img src="data:image/png;base64,{viz_data}" 
+                             style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     </div>
-                        """)
-                
-                # 정렬되지 않은 기타 시각화 타입들도 출력
-                for viz_type, viz_data in viz_types.items():
-                    if viz_type not in desired_order:
-                        title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
-                        html_parts.append(f"""
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                        <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
-                        <div style="text-align: center;">
-                            <img src="data:image/png;base64,{viz_data}" 
-                                 style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        </div>
+                </div>
+                    """)
+            
+            # 정렬되지 않은 기타 시각화 타입들도 출력
+            for viz_type, viz_data in viz_types.items():
+                if viz_type not in desired_order:
+                    title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
+                    html_parts.append(f"""
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
+                    <div style="text-align: center;">
+                        <img src="data:image/png;base64,{viz_data}" 
+                             style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     </div>
-                        """)
-                
-                html_parts.append("""
+                </div>
+                    """)
+            
+            # XAI 분석 결과 컨테이너 종료
+            html_parts.append("""
                 </div>
             </div>
-                """)
+            """)
             
             html_parts.append("""
         </div>
