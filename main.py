@@ -22,12 +22,44 @@ import sys
 import subprocess
 from datetime import datetime
 import time
+import multiprocessing as mp
 
 # 캐시 매니저 import
 from cache_utils.cache_manager import get_cache_manager, save_analysis_data, get_cached_analysis_data
 
 # 데이터 유틸리티 import
 from data_utils import run_attribute_analysis
+
+
+# 전역 함수로 정의 (병렬 처리용)
+def generate_single_report_wrapper(args):
+    """단일 XAI 보고서를 생성하는 전역 함수 (병렬 처리용)"""
+    filename, xai_result, xai_report_dir = args
+    try:
+        # 각 프로세스에서 새로운 visualizer 인스턴스 생성
+        from data_utils.xai_visualizer import XAIVisualizer
+        visualizer = XAIVisualizer()
+        
+        # 개별 XAI 보고서 HTML 생성
+        from report_generator.report_layout import generate_individual_xai_html
+        html_content = generate_individual_xai_html(filename, xai_result, visualizer)
+        
+        if html_content:
+            # 파일명에서 확장자 제거하고 '_report.html' 추가
+            base_filename = os.path.splitext(filename)[0]
+            report_filename = f"{base_filename}_report.html"
+            report_path = os.path.join(xai_report_dir, report_filename)
+            
+            # HTML 파일 저장
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            return filename, True, None
+        else:
+            return filename, False, "Failed to generate HTML content"
+            
+    except Exception as e:
+        return filename, False, str(e)
 
 
 def format_time(seconds):
@@ -489,11 +521,67 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
     
     return processing_stats
 
+def generate_individual_xai_reports(directory, cache_dir):
+    """개별 XAI 분석 보고서를 생성합니다. (최적화됨)"""
+    try:
+        # XAI 분석 데이터 로드
+        xai_data = get_cached_analysis_data(directory, "xai_analysis")
+        if not xai_data:
+            print("ℹ️  No XAI analysis data found. Skipping individual XAI reports.")
+            return
+        
+        # 개별 보고서 저장 디렉토리 생성
+        xai_report_dir = os.path.join(cache_dir, "xai_full_report")
+        os.makedirs(xai_report_dir, exist_ok=True)
+        
+        print(f"📁 Creating individual XAI reports in: {xai_report_dir}")
+        
+        # 배치 데이터 준비 (xai_report_dir 포함)
+        xai_batch = [(filename, xai_result, xai_report_dir) for filename, xai_result in xai_data.items()]
+        total_files = len(xai_batch)
+        
+        print(f"🔄 Starting parallel report generation for {total_files} files...")
+        
+        # CPU 코어 수에 따라 워커 수 결정 (최대 4개)
+        num_workers = min(4, mp.cpu_count())
+        
+        # 병렬 처리 실행 (전역 함수 사용)
+        with mp.Pool(processes=num_workers) as pool:
+            results = pool.map(generate_single_report_wrapper, xai_batch)
+        
+        # 결과 집계
+        generated_count = 0
+        failed_count = 0
+        
+        for filename, success, error in results:
+            if success:
+                generated_count += 1
+                print(f"  ✅ Generated: {os.path.splitext(filename)[0]}_report.html")
+            else:
+                failed_count += 1
+                print(f"  ❌ Failed: {filename} - {error}")
+        
+        print(f"\n📊 Individual XAI Reports Summary:")
+        print(f"  📁 Generated: {generated_count} reports")
+        print(f"  ❌ Failed: {failed_count} reports")
+        print(f"  📂 Location: {xai_report_dir}")
+        print(f"  ⚡ Used {num_workers} parallel workers")
+        
+        return generated_count
+        
+    except ImportError as e:
+        print(f"❌ Error importing required modules: {e}")
+        return 0
+    except Exception as e:
+        print(f"❌ Error generating individual XAI reports: {e}")
+        return 0
+
+
 def run_comparison(directories, mode):
     pass
 
 
-def run_report(directory, mode):
+def run_report(directory, mode, full_xai=False):
     """디렉토리에 대한 보고서를 생성합니다."""
     if not os.path.exists(directory):
         print(f"Error: Directory {directory} does not exist.")
@@ -526,21 +614,30 @@ def run_report(directory, mode):
                     f.write(complete_html)
                 print(f"Complete HTML report saved to: {output_file}")
                 
-                # XAI 가이드라인도 함께 생성
-                try:
-                    from report_generator.guideline_generator import create_xai_guideline
+                            # XAI 가이드라인도 함께 생성
+            try:
+                from report_generator.guideline_generator import create_xai_guideline
+                
+                print("\n📚 Generating Guideline Docs...")
+                xai_guideline_file = os.path.join(cache_manager.cache_dir, f'{dataset_name}_xai_guideline.html')
+                create_xai_guideline(xai_guideline_file)
+                print(f"✅ XAI Guideline saved to: {xai_guideline_file}")
                     
-                    print("\n📚 Generating Guideline Docs...")
-                    xai_guideline_file = os.path.join(cache_manager.cache_dir, f'{dataset_name}_xai_guideline.html')
-                    create_xai_guideline(xai_guideline_file)
-                    print(f"✅ XAI Guideline saved to: {xai_guideline_file}")
-                        
-                except ImportError as e:
-                    print(f"⚠️  Could not import guideline generator: {e}")
-                    print("💡 XAI guideline generation skipped")
-                except Exception as e:
-                    print(f"⚠️  Error generating XAI guideline: {e}")
-                    print("💡 XAI guideline generation skipped")
+            except ImportError as e:
+                print(f"⚠️  Could not import guideline generator: {e}")
+                print("💡 XAI guideline generation skipped")
+            except Exception as e:
+                print(f"⚠️  Error generating XAI guideline: {e}")
+                print("💡 XAI guideline generation skipped")
+            
+            # 개별 XAI 보고서 생성 (full_xai 옵션이 활성화된 경우)
+            if full_xai:
+                print("\n🔬 Generating Individual XAI Reports...")
+                individual_count = generate_individual_xai_reports(directory, cache_manager.cache_dir)
+                if individual_count > 0:
+                    print(f"✅ Generated {individual_count} individual XAI reports")
+                else:
+                    print("ℹ️  No individual XAI reports were generated")
                 
             else:
                 print("❌ Failed to generate complete HTML report.")
@@ -646,6 +743,9 @@ Examples:
   # Generate report
   ddoc report /path/to/dataset
   
+  # Generate report with individual XAI reports
+  ddoc report /path/to/dataset -f
+  
   # Run web application
   ddoc app --port 5555 --debug
         """
@@ -672,6 +772,7 @@ Examples:
     parser_report.add_argument('-r', '--root', help='Root directory to search for datasets.')
     parser_report.add_argument('directory', help='Directory to create a report for.')
     parser_report.add_argument('--mode', choices=['streamlit', 'pdf', 'html'], default='html', help='Mode to generate report: streamlit, pdf, or html.')
+    parser_report.add_argument('-f', '--full-xai', action='store_true', help='Generate individual XAI reports for all analyzed files.')
 
     # Webapp sub-command
     parser_app = subparsers.add_parser('app', help='Run the Flask web application.')
@@ -832,7 +933,7 @@ Examples:
     elif args.command == 'report':
         if args.root:
             args.directory = os.path.join(args.root, args.directory)
-        run_report(args.directory, args.mode)
+        run_report(args.directory, args.mode, args.full_xai)
 
     elif args.command == 'app':
         run_webapp(args.port, args.debug, args.fiftyone_port)
