@@ -201,11 +201,8 @@ class ImageAnalysisReport:
             }
         }
     
-    def create_visualizations(self):
-        """시각화 차트들을 생성합니다."""
-        if not self.attr_data:
-            return {}
-        
+    def create_basic_attribute_charts(self):
+        """기본 속성 관련 차트들을 생성합니다."""
         charts = {}
         
         # 1. 파일 크기 분포 히스토그램
@@ -232,20 +229,7 @@ class ImageAnalysisReport:
             charts['format_distribution'] = self.fig_to_base64()
             plt.close()
         
-        # 3. 노이즈 vs 선명도 산점도
-        noise_levels = [item['noise_level'] for item in self.data.values()]
-        sharpness_values = [item['sharpness'] for item in self.data.values()]
-        
-        plt.figure(figsize=(10, 6))
-        plt.scatter(noise_levels, sharpness_values, alpha=0.6, color='coral')
-        plt.title('Noise Level vs Sharpness', fontsize=14, fontweight='bold')
-        plt.xlabel('Noise Level')
-        plt.ylabel('Sharpness')
-        plt.grid(True, alpha=0.3)
-        charts['noise_vs_sharpness'] = self.fig_to_base64()
-        plt.close()
-        
-        # 4. 해상도별 분포 (상위 10개)
+        # 3. 해상도별 분포 (상위 10개)
         resolutions = {}
         for item in self.data.values():
             res = item['resolution']
@@ -264,8 +248,32 @@ class ImageAnalysisReport:
             charts['resolution_distribution'] = self.fig_to_base64()
             plt.close()
         
-        # 5. 임베딩 공간 시각화 (PCA)
-        # 임베딩 데이터가 있는 경우
+        return charts
+    
+    def create_quality_attribute_charts(self):
+        """이미지 품질 속성 관련 차트들을 생성합니다."""
+        charts = {}
+        
+        # 노이즈 vs 선명도 산점도
+        noise_levels = [item['noise_level'] for item in self.data.values()]
+        sharpness_values = [item['sharpness'] for item in self.data.values()]
+        
+        plt.figure(figsize=(10, 6))
+        plt.scatter(noise_levels, sharpness_values, alpha=0.6, color='coral')
+        plt.title('Noise Level vs Sharpness', fontsize=14, fontweight='bold')
+        plt.xlabel('Noise Level')
+        plt.ylabel('Sharpness')
+        plt.grid(True, alpha=0.3)
+        charts['noise_vs_sharpness'] = self.fig_to_base64()
+        plt.close()
+        
+        return charts
+    
+    def create_embedding_charts(self):
+        """임베딩 분석 관련 차트들을 생성합니다."""
+        charts = {}
+        
+        # 임베딩 공간 시각화 (PCA)
         if self.embed_data and len(self.embed_data) > 1:
             embeddings = np.array([item['embedding'] for item in self.embed_data.values()])
             pca = PCA(n_components=2)
@@ -280,24 +288,187 @@ class ImageAnalysisReport:
             charts['embeddings_pca'] = self.fig_to_base64()
             plt.close()
         
-        # 6. 클러스터링 결과 시각화 (클러스터링 데이터가 있는 경우)
+        return charts
+    
+    def create_clustering_charts(self):
+        """클러스터링 분석 관련 차트들을 생성합니다."""
+        charts = {}
+        
         if self.clustering_data and 'embeddings_2d' in self.clustering_data:
             embeddings_2d = np.array(self.clustering_data['embeddings_2d'])
             cluster_labels = np.array(self.clustering_data['cluster_labels'])
             method = self.clustering_data.get('method', 'Unknown')
             n_clusters = self.clustering_data.get('n_clusters', 0)
             
+            # 클러스터링 결과 시각화
             plt.figure(figsize=(12, 8))
             scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
                                 c=cluster_labels, cmap='viridis', alpha=0.6)
             
-            # 클러스터 중심점 표시 (2D 센트로이드 직접 사용)
+            # 클러스터 중심점 표시 (클러스터별 색상으로 구분)
             if 'centroids' in self.clustering_data and self.clustering_data['centroids']:
                 centroids_2d = np.array(self.clustering_data['centroids'])
-                plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], 
-                           c='red', marker='x', s=200, linewidths=3, label='Cluster Centroids')
+                
+                # 클러스터별 색상 정의 (viridis 컬러맵 사용)
+                cluster_colors = plt.cm.viridis(np.linspace(0, 1, n_clusters))
+                
+                # 2D 센트로이드 표시 (클러스터별 색상, X 마커)
+                for i in range(n_clusters):
+                    plt.scatter(centroids_2d[i, 0], centroids_2d[i, 1], 
+                               c=[cluster_colors[i]], marker='x', s=200, linewidths=3, 
+                               label='2D Centroid' if i == 0 else "")
+                
+                # 고차원 센트로이드를 PCA로 축소한 좌표 표시 (클러스터별 색상, O 마커)
+                if 'centroids_high_dim' in self.clustering_data and 'pca_components' in self.clustering_data:
+                    try:
+                        # 고차원 센트로이드 가져오기
+                        centroids_high_dim = np.array(self.clustering_data['centroids_high_dim'])
+                        pca_components = np.array(self.clustering_data['pca_components'])
+                        
+                        # 고차원 센트로이드를 2D로 축소
+                        centroids_high_dim_2d = np.dot(centroids_high_dim, pca_components.T)
+                        
+                        # 고차원 센트로이드 PCA 축소 좌표 표시 (클러스터별 색상, O 마커)
+                        for i in range(n_clusters):
+                            plt.scatter(centroids_high_dim_2d[i, 0], centroids_high_dim_2d[i, 1], 
+                                       c=[cluster_colors[i]], marker='o', s=150, linewidths=2, alpha=0.8,
+                                       label='High-Dim Centroid' if i == 0 else "")
+                        
+                        # 클러스터 번호와 거리 정보를 클러스터 외곽에 표시
+                        for i in range(n_clusters):
+                            # 2D 센트로이드와 고차원 센트로이드 PCA 축소 좌표 간의 거리 계산
+                            distance = np.linalg.norm(centroids_2d[i] - centroids_high_dim_2d[i])
+                            
+                            # 거리에 따른 색상 변경
+                            if distance > 0.5:
+                                text_color = 'red'  # 큰 차이
+                                alpha = 0.9
+                            elif distance > 0.2:
+                                text_color = 'orange'  # 중간 차이
+                                alpha = 0.8
+                            else:
+                                text_color = 'green'  # 작은 차이
+                                alpha = 0.7
+                            
+                            # 클러스터 외곽에 레이블 배치를 위한 위치 계산
+                            cluster_indices = np.where(cluster_labels == i)[0]
+                            cluster_points = embeddings_2d[cluster_indices]
+                            
+                            if len(cluster_points) > 0:
+                                # 클러스터의 중심점 계산
+                                cluster_center = np.mean(cluster_points, axis=0)
+                                
+                                # 클러스터의 반지름 계산 (중심에서 가장 먼 점까지의 거리)
+                                distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
+                                cluster_radius = np.max(distances_from_center)
+                                
+                                # 레이블을 클러스터 외곽에 배치 (반지름의 1.3배 거리)
+                                label_distance = cluster_radius * 1.3
+                                
+                                # 중심점에서 가장 멀리 있는 방향으로 레이블 배치
+                                if cluster_radius > 0:
+                                    # 가장 멀리 있는 점의 방향 계산
+                                    max_dist_idx = np.argmax(distances_from_center)
+                                    direction = cluster_points[max_dist_idx] - cluster_center
+                                    direction = direction / np.linalg.norm(direction)
+                                    
+                                    # 레이블 위치 계산
+                                    label_x = cluster_center[0] + direction[0] * label_distance
+                                    label_y = cluster_center[1] + direction[1] * label_distance
+                                else:
+                                    # 클러스터가 한 점인 경우 센트로이드 근처에 배치
+                                    label_x = centroids_2d[i, 0] + 0.1
+                                    label_y = centroids_2d[i, 1] + 0.1
+                                
+                                # 통합된 레이블 표시 (클러스터 번호 + 거리)
+                                plt.annotate(f'C{i} (d={distance:.3f})', 
+                                           (label_x, label_y),
+                                           xytext=(0, 0), textcoords='offset points',
+                                           fontsize=10, color=text_color, fontweight='bold',
+                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=alpha, edgecolor=cluster_colors[i], linewidth=1.5))
+                            
+                            # 두 센트로이드를 연결하는 선 그리기 (클러스터별 색상)
+                            plt.plot([centroids_2d[i, 0], centroids_high_dim_2d[i, 0]], 
+                                   [centroids_2d[i, 1], centroids_high_dim_2d[i, 1]], 
+                                   color=cluster_colors[i], linestyle='--', alpha=0.6, linewidth=1.5)
+                        
+                        title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\nX: 2D Centroids, O: High-Dim Centroids (PCA) - Same color = Same cluster'
+                        
+                    except Exception as e:
+                        print(f"⚠️ Error projecting high-dimensional centroids: {e}")
+                        # 고차원 센트로이드 투영 실패 시 기본 2D 센트로이드만 표시
+                        for i in range(n_clusters):
+                            plt.scatter(centroids_2d[i, 0], centroids_2d[i, 1], 
+                                       c=[cluster_colors[i]], marker='x', s=200, linewidths=3, 
+                                       label=f'C{i} Centroid' if i == 0 else "")
+                        
+                        # 클러스터 번호를 클러스터 외곽에 표시
+                        for i in range(n_clusters):
+                            cluster_indices = np.where(cluster_labels == i)[0]
+                            cluster_points = embeddings_2d[cluster_indices]
+                            
+                            if len(cluster_points) > 0:
+                                cluster_center = np.mean(cluster_points, axis=0)
+                                distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
+                                cluster_radius = np.max(distances_from_center)
+                                label_distance = cluster_radius * 1.3
+                                
+                                if cluster_radius > 0:
+                                    max_dist_idx = np.argmax(distances_from_center)
+                                    direction = cluster_points[max_dist_idx] - cluster_center
+                                    direction = direction / np.linalg.norm(direction)
+                                    label_x = cluster_center[0] + direction[0] * label_distance
+                                    label_y = cluster_center[1] + direction[1] * label_distance
+                                else:
+                                    label_x = centroids_2d[i, 0] + 0.1
+                                    label_y = centroids_2d[i, 1] + 0.1
+                                
+                                plt.annotate(f'C{i}', 
+                                           (label_x, label_y),
+                                           xytext=(0, 0), textcoords='offset points',
+                                           fontsize=10, fontweight='bold', color=cluster_colors[i],
+                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor=cluster_colors[i], linewidth=1.5))
+                        
+                        title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids (X markers)'
+                else:
+                    # 고차원 센트로이드 데이터가 없는 경우 기본 표시
+                    cluster_colors = plt.cm.viridis(np.linspace(0, 1, n_clusters))
+                    
+                    for i in range(n_clusters):
+                        plt.scatter(centroids_2d[i, 0], centroids_2d[i, 1], 
+                                   c=[cluster_colors[i]], marker='x', s=200, linewidths=3, 
+                                   label=f'C{i} Centroid' if i == 0 else "")
+                    
+                    # 클러스터 번호를 클러스터 외곽에 표시
+                    for i in range(n_clusters):
+                        cluster_indices = np.where(cluster_labels == i)[0]
+                        cluster_points = embeddings_2d[cluster_indices]
+                        
+                        if len(cluster_points) > 0:
+                            cluster_center = np.mean(cluster_points, axis=0)
+                            distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
+                            cluster_radius = np.max(distances_from_center)
+                            label_distance = cluster_radius * 1.3
+                            
+                            if cluster_radius > 0:
+                                max_dist_idx = np.argmax(distances_from_center)
+                                direction = cluster_points[max_dist_idx] - cluster_center
+                                direction = direction / np.linalg.norm(direction)
+                                label_x = cluster_center[0] + direction[0] * label_distance
+                                label_y = cluster_center[1] + direction[1] * label_distance
+                            else:
+                                label_x = centroids_2d[i, 0] + 0.1
+                                label_y = centroids_2d[i, 1] + 0.1
+                            
+                            plt.annotate(f'C{i}', 
+                                       (label_x, label_y),
+                                       xytext=(0, 0), textcoords='offset points',
+                                       fontsize=10, fontweight='bold', color=cluster_colors[i],
+                                       bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor=cluster_colors[i], linewidth=1.5))
+                    
+                    title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids (X markers)'
             
-            plt.title(f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids', fontsize=14, fontweight='bold')
+            plt.title(title_text, fontsize=14, fontweight='bold')
             plt.xlabel('PC1')
             plt.ylabel('PC2')
             plt.colorbar(scatter, label='Cluster')
@@ -306,7 +477,7 @@ class ImageAnalysisReport:
             charts['clustering_results'] = self.fig_to_base64()
             plt.close()
             
-            # 7. 클러스터 크기 분포
+            # 클러스터 크기 분포
             if 'cluster_stats' in self.clustering_data:
                 cluster_sizes = []
                 cluster_names = []
@@ -580,8 +751,13 @@ class ImageAnalysisReport:
         
         # 데이터 준비
         summary = self.create_summary_stats()
-        charts = self.create_visualizations()
         samples = self.create_sample_images_table()
+        
+        # 각 섹션별 차트 생성
+        basic_charts = self.create_basic_attribute_charts()
+        quality_charts = self.create_quality_attribute_charts()
+        embedding_charts = self.create_embedding_charts()
+        clustering_charts = self.create_clustering_charts()
         
         # XAI 시각화 및 요약 통계 생성 (대표 이미지 선택은 한 번만)
         xai_charts = self.create_xai_visualizations()
@@ -589,7 +765,10 @@ class ImageAnalysisReport:
         
         print(f"📊 Report data summary:")
         print(f"  - Summary stats: {'✅' if summary else '❌'}")
-        print(f"  - Charts: {len(charts)} visualizations")
+        print(f"  - Basic charts: {len(basic_charts)} charts")
+        print(f"  - Quality charts: {len(quality_charts)} charts")
+        print(f"  - Embedding charts: {len(embedding_charts)} charts")
+        print(f"  - Clustering charts: {len(clustering_charts)} charts")
         print(f"  - Samples: {len(samples)} sample images")
         print(f"  - XAI charts: {len(xai_charts)} XAI visualizations")
         print(f"  - XAI summary: {'✅' if xai_summary else '❌'}")
@@ -619,36 +798,37 @@ class ImageAnalysisReport:
                 </h2>
             """)
             
-            # 1. 요약 통계 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_summary_statistics_section(summary))
-        
-            # 2. 형식별 분포 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_format_distribution_section(summary))
+            # ===== 1. 기본 속성 분석 =====
+            # 1-1. 요약 통계 섹션 (파일 크기 차트 포함)
+            html_parts.append(generate_summary_statistics_section(summary, basic_charts.get('size_distribution')))
             
-            # 3. 시각화 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_visualizations_section(charts))
-            
-            # 4. 샘플 이미지 테이블 섹션 (report_layout 모듈 사용)
+            # 1-2. 샘플 이미지 테이블 섹션 (파일 크기 차트 바로 아래)
             html_parts.append(generate_sample_images_section(samples))
             
-            # 5. 상세 통계 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_detailed_statistics_section(summary))
+            # 1-3. 형식별 분포 섹션 (형식별 분포 차트 포함)
+            html_parts.append(generate_format_distribution_section(summary, basic_charts.get('format_distribution')))
             
-            # 6. 임베딩 정보 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_embedding_info_section(self.embed_data))
+            # 1-4. 해상도 정보 섹션 (해상도 분포 차트 포함)
+            html_parts.append(generate_resolution_info_section(summary, basic_charts.get('resolution_distribution')))
             
-            # 7. 해상도 정보 섹션 (report_layout 모듈 사용)
-            html_parts.append(generate_resolution_info_section(summary))
+            # ===== 2. 이미지 품질 속성 =====
+            # 2-1. 상세 통계 섹션 (품질 속성 차트 포함)
+            html_parts.append(generate_detailed_statistics_section(summary, quality_charts.get('noise_vs_sharpness')))
             
-            # 8. 클러스터링 요약 섹션 (report_layout 모듈 사용)
+            # ===== 3. 임베딩 분석 =====
+            # 3-1. 임베딩 정보 섹션 (임베딩 차트 포함)
+            html_parts.append(generate_embedding_info_section(self.embed_data, embedding_charts.get('embeddings_pca')))
+            
+            # ===== 4. 클러스터링 분석 =====
+            # 4-1. 클러스터링 요약 섹션 (클러스터링 차트 포함)
             clustering_summary = self.create_clustering_summary()
-            html_parts.append(generate_clustering_summary_section(clustering_summary))
-        
+            html_parts.append(generate_clustering_summary_section(clustering_summary, clustering_charts))
+            
             # ===== 속성 및 임베딩 분석 섹션 종료 =====
             html_parts.append("""
             </div>
             """)
-        
+            
             # ===== XAI 분석 섹션 시작 =====
             # 9. XAI 분석 결과 섹션 (report_layout 모듈 사용)
             if xai_summary or xai_charts:
@@ -663,18 +843,18 @@ class ImageAnalysisReport:
                     🧠 XAI (Explainable AI) Analysis Results
                 </h2>
             """)
-                
+                    
                 # XAI 분석 결과 섹션 (report_layout 모듈 사용)
                 html_parts.append(generate_xai_analysis_section(xai_summary, xai_charts))
-                
+                    
                 html_parts.append("""
             </div>
-                """)
-        
+            """)
+                
             # ===== XAI 분석 섹션 종료 =====
             
             return ''.join(html_parts)
-            
+                
         except ImportError as e:
             print(f"❌ Error importing report_layout functions: {e}")
             return None

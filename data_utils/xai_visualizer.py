@@ -43,6 +43,8 @@ class XAIVisualizer:
         import warnings
         warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
         warnings.filterwarnings('ignore', category=RuntimeWarning)
+        warnings.filterwarnings('ignore', message='.*Glyph.*missing from font.*')
+        warnings.filterwarnings('ignore', message='.*This figure includes Axes.*not compatible.*')
         
         # 이모지 폰트 문제 해결을 위한 설정
         plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'AppleGothic', 'sans-serif']
@@ -561,17 +563,17 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             
             summary_text = f"""Centroid Analysis Summary:
 
-📊 Methods: {len(methods)}
-🎯 Best Method: {best_method}
+Methods: {len(methods)}
+Best Method: {best_method}
    Confidence: {best_confidence:.3f}
 
-📈 Statistics:
+Statistics:
 • Average X: {np.mean(x_coords):.2f}
 • Average Y: {np.mean(y_coords):.2f}
 • Std X: {np.std(x_coords):.2f}
 • Std Y: {np.std(y_coords):.2f}
 
-📋 Method Descriptions:"""
+Method Descriptions:"""
             
             # 각 방법의 설명 추가
             for i, (method, desc) in enumerate(zip(methods, descriptions)):
@@ -648,8 +650,8 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                     # CAM 데이터를 인스턴스 변수로 저장하여 재사용
                     self._current_cam_data = grayscale_cam
                     print(f"    ✅ Loaded original CAM data from: {cam_file_path}")
-                    print(f"    📊 CAM data info: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
-                    print(f"    📊 CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
+                    print(f"    CAM data info: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
+                    print(f"    CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
                 except Exception as e:
                     print(f"    ⚠️  Failed to load original CAM data from file: {e}")
                     grayscale_cam = None
@@ -670,8 +672,8 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                     grayscale_cam = np.random.normal(mean_val, std_val, shape)
                     grayscale_cam = np.clip(grayscale_cam, min_val, max_val)
                     print(f"    ⚠️  Using simulated CAM data from metadata")
-                    print(f"    📊 Simulated CAM data info: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
-                    print(f"    📊 Simulated CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
+                    print(f"    Simulated CAM data info: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")
+                    print(f"    Simulated CAM data stats: min={grayscale_cam.min():.6f}, max={grayscale_cam.max():.6f}, mean={grayscale_cam.mean():.6f}")
             
             cam_result = {
                 'image_path': comprehensive_result.get('image_path'),
@@ -1135,21 +1137,21 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             
             summary_text = f"""CAM Analysis Summary:
 
-📊 Basic Stats:
+Basic Stats:
 • Mean: {mean_val:.4f}
 • Std Dev: {std_val:.4f}
 • Range: {max_val-min_val:.4f}
 
-🎯 Activation:
+Activation:
 • High Act. Ratio: {high_activation_ratio:.1f}%
 • Total Pixels: {total_pixels:,}
 
-📈 Quality Scores:
+Quality Scores:
 • Concentration: {concentration:.3f}
 • Uniformity: {uniformity:.3f}
 • Confidence: {confidence:.3f}
 
-📏 Distribution:
+Distribution:
 • IQR: {iqr:.4f}
 • Q50/Q25: {q50_val/q25_val:.2f if q25_val != 0 else 'N/A'}"""
             
@@ -1313,16 +1315,16 @@ BBox Index: {overlap_results.get('largest_bbox_idx', 'N/A')}"""
             
             summary_text = f"""Overlap Analysis Summary:
 
-📊 Metrics:
+Metrics:
 • IoU Score: {iou_score:.3f}
 • CAM Coverage: {cam_coverage:.3f}
 • BBox Coverage: {bbox_coverage:.3f}
 
-🎯 Object:
+Object:
 • Largest Class: {largest_class}
 • Quality: {overlap_quality}
 
-📈 Assessment:
+Assessment:
 • Overlap Quality: {overlap_quality}
 • Model Focus: {'Good' if cam_coverage > 0.5 else 'Needs Improvement'}"""
             

@@ -614,43 +614,42 @@ def run_report(directory, mode, full_xai=False):
                     f.write(complete_html)
                 print(f"Complete HTML report saved to: {output_file}")
                 
-                            # XAI 가이드라인도 함께 생성
-            try:
-                from report_generator.guideline_generator import create_xai_guideline
-                
-                print("\n📚 Generating Guideline Docs...")
-                xai_guideline_file = os.path.join(cache_manager.cache_dir, f'{dataset_name}_xai_guideline.html')
-                create_xai_guideline(xai_guideline_file)
-                print(f"✅ XAI Guideline saved to: {xai_guideline_file}")
+                # XAI 가이드라인도 함께 생성
+                try:
+                    from report_generator.guideline_generator import create_xai_guideline
                     
-            except ImportError as e:
-                print(f"⚠️  Could not import guideline generator: {e}")
-                print("💡 XAI guideline generation skipped")
-            except Exception as e:
-                print(f"⚠️  Error generating XAI guideline: {e}")
-                print("💡 XAI guideline generation skipped")
-            
-            # 개별 XAI 보고서 생성 (full_xai 옵션이 활성화된 경우)
-            if full_xai:
-                print("\n🔬 Generating Individual XAI Reports...")
-                individual_count = generate_individual_xai_reports(directory, cache_manager.cache_dir)
-                if individual_count > 0:
-                    print(f"✅ Generated {individual_count} individual XAI reports")
-                else:
-                    print("ℹ️  No individual XAI reports were generated")
+                    print("\n📚 Generating Guideline Docs...")
+                    xai_guideline_file = os.path.join(cache_manager.cache_dir, f'{dataset_name}_xai_guideline.html')
+                    create_xai_guideline(xai_guideline_file)
+                    print(f"✅ XAI Guideline saved to: {xai_guideline_file}")
+                        
+                except ImportError as e:
+                    print(f"⚠️  Could not import guideline generator: {e}")
+                    print("💡 XAI guideline generation skipped")
+                except Exception as e:
+                    print(f"⚠️  Error generating XAI guideline: {e}")
+                    print("💡 XAI guideline generation skipped")
                 
+                # 개별 XAI 보고서 생성 (full_xai 옵션이 활성화된 경우)
+                if full_xai:
+                    print("\n🔬 Generating Individual XAI Reports...")
+                    individual_count = generate_individual_xai_reports(directory, cache_manager.cache_dir)
+                    if individual_count > 0:
+                        print(f"✅ Generated {individual_count} individual XAI reports")
+                    else:
+                        print("ℹ️  No individual XAI reports were generated")
+                
+                # 보고서 생성 시간 출력
+                report_time = time.time() - report_start_time
+                print("\n" + "=" * 50)
+                print("📄 REPORT GENERATION SUMMARY")
+                print("=" * 50)
+                print(f"⏱️  Report Generation Time: {format_time(report_time)}")
+                print(f"📅 Completed at:           {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                print("=" * 50)
             else:
                 print("❌ Failed to generate complete HTML report.")
                 return
-            
-            # 보고서 생성 시간 출력
-            report_time = time.time() - report_start_time
-            print("\n" + "=" * 50)
-            print("📄 REPORT GENERATION SUMMARY")
-            print("=" * 50)
-            print(f"⏱️  Report Generation Time: {format_time(report_time)}")
-            print(f"📅 Completed at:           {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 50)
                 
         except ImportError as e:
             print(f"❌ Error importing report module: {e}")
