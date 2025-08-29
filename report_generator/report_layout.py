@@ -306,10 +306,18 @@ def generate_individual_xai_html(filename, xai_result, visualizer):
 
 # ===== 섹션별 HTML 생성 함수들 =====
 
-def generate_summary_statistics_section(summary_data):
+def generate_summary_statistics_section(summary_data, size_chart=None):
     """요약 통계 섹션 HTML 생성"""
     if not summary_data:
         return ""
+    
+    chart_html = ""
+    if size_chart:
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{size_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        </div>
+        """
     
     return f"""
     <div style="margin-bottom: 20px;">
@@ -332,11 +340,12 @@ def generate_summary_statistics_section(summary_data):
                 <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{len(summary_data.get('formats', {}))}</div>
             </div>
         </div>
+        {chart_html}
     </div>
     """
 
 
-def generate_format_distribution_section(summary_data):
+def generate_format_distribution_section(summary_data, format_chart=None):
     """형식별 분포 섹션 HTML 생성"""
     if not summary_data.get('formats'):
         return ""
@@ -354,12 +363,21 @@ def generate_format_distribution_section(summary_data):
         </div>
         """)
     
+    chart_html = ""
+    if format_chart:
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{format_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        </div>
+        """
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📋 Format Distribution</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
             {''.join(format_items)}
         </div>
+        {chart_html}
     </div>
     """
 
@@ -477,85 +495,102 @@ def generate_sample_images_section(samples_data):
     """
 
 
-def generate_detailed_statistics_section(summary_data):
+def generate_detailed_statistics_section(summary_data, quality_chart=None):
     """상세 통계 섹션 HTML 생성"""
-    if not (summary_data.get('size_stats') or summary_data.get('noise_stats') or summary_data.get('sharpness_stats')):
+    if not summary_data:
         return ""
     
-    stats_items = []
-    
-    if summary_data.get('size_stats'):
-        stats_items.append(f"""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h4 style="color: #495057; margin: 0 0 10px 0;">File Size Statistics</h4>
-            <p style="margin: 5px 0; color: #6c757d;">Min: {summary_data.get('size_stats', {}).get('min', 0):.2f} MB</p>
-            <p style="margin: 5px 0; color: #6c757d;">Max: {summary_data.get('size_stats', {}).get('max', 0):.2f} MB</p>
-            <p style="margin: 5px 0; color: #6c757d;">Mean: {summary_data.get('size_stats', {}).get('mean', 0):.2f} MB</p>
-            <p style="margin: 5px 0; color: #6c757d;">Std: {summary_data.get('size_stats', {}).get('std', 0):.2f} MB</p>
+    # 노이즈 통계
+    noise_stats = summary_data.get('noise_stats', {})
+    noise_html = f"""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
+        <h4 style="color: #6c757d; margin: 0 0 10px 0;">📊 Noise Level Statistics</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div style="text-align: center;">
+                <div style="font-size: 1.2em; font-weight: bold; color: #495057;">{noise_stats.get('mean', 0):.4f}</div>
+                <div style="font-size: 0.8em; color: #6c757d;">Mean</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 1.2em; font-weight: bold; color: #495057;">{noise_stats.get('std', 0):.4f}</div>
+                <div style="font-size: 0.8em; color: #6c757d;">Std Dev</div>
+            </div>
         </div>
-        """)
+    </div>
+    """
     
-    if summary_data.get('noise_stats'):
-        stats_items.append(f"""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h4 style="color: #495057; margin: 0 0 10px 0;">Noise Level Statistics</h4>
-            <p style="margin: 5px 0; color: #6c757d;">Min: {summary_data.get('noise_stats', {}).get('min', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Max: {summary_data.get('noise_stats', {}).get('max', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Mean: {summary_data.get('noise_stats', {}).get('mean', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Std: {summary_data.get('noise_stats', {}).get('std', 0):.4f}</p>
+    # 선명도 통계
+    sharpness_stats = summary_data.get('sharpness_stats', {})
+    sharpness_html = f"""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
+        <h4 style="color: #6c757d; margin: 0 0 10px 0;">🔍 Sharpness Statistics</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div style="text-align: center;">
+                <div style="font-size: 1.2em; font-weight: bold; color: #495057;">{sharpness_stats.get('mean', 0):.4f}</div>
+                <div style="font-size: 0.8em; color: #6c757d;">Mean</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 1.2em; font-weight: bold; color: #495057;">{sharpness_stats.get('std', 0):.4f}</div>
+                <div style="font-size: 0.8em; color: #6c757d;">Std Dev</div>
+            </div>
         </div>
-        """)
+    </div>
+    """
     
-    if summary_data.get('sharpness_stats'):
-        stats_items.append(f"""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h4 style="color: #495057; margin: 0 0 10px 0;">Sharpness Statistics</h4>
-            <p style="margin: 5px 0; color: #6c757d;">Min: {summary_data.get('sharpness_stats', {}).get('min', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Max: {summary_data.get('sharpness_stats', {}).get('max', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Mean: {summary_data.get('sharpness_stats', {}).get('mean', 0):.4f}</p>
-            <p style="margin: 5px 0; color: #6c757d;">Std: {summary_data.get('sharpness_stats', {}).get('std', 0):.4f}</p>
+    chart_html = ""
+    if quality_chart:
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{quality_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
         </div>
-        """)
+        """
     
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📊 Detailed Statistics</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-            {''.join(stats_items)}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            {noise_html}
+            {sharpness_html}
         </div>
+        {chart_html}
     </div>
     """
 
 
-def generate_embedding_info_section(embed_data):
+def generate_embedding_info_section(embed_data, embedding_chart=None):
     """임베딩 정보 섹션 HTML 생성"""
     if not embed_data:
         return ""
     
-    embeddings = [item['embedding'] for item in embed_data.values()]
-    if not embeddings:
-        return ""
+    total_embeddings = len(embed_data)
+    embedding_dim = len(list(embed_data.values())[0]['embedding']) if embed_data else 0
     
-    embedding_dim = len(embeddings[0])
+    chart_html = ""
+    if embedding_chart:
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{embedding_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        </div>
+        """
     
     return f"""
     <div style="margin-bottom: 20px;">
-        <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🪐 Embedding Informations</h3>
+        <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 Embedding Information</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Embeddings</h4>
+                <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{total_embeddings:,}</div>
+            </div>
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
                 <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Embedding Dimension</h4>
                 <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{embedding_dim}</div>
             </div>
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                <h4 style="color: #6c757d; margin: 0 8px 0; font-size: 0.9em;">Total Embeddings</h4>
-                <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{len(embeddings):,}</div>
-            </div>
         </div>
+        {chart_html}
     </div>
     """
 
 
-def generate_resolution_info_section(summary_data):
+def generate_resolution_info_section(summary_data, resolution_chart=None):
     """해상도 정보 섹션 HTML 생성"""
     if not summary_data.get('resolutions'):
         return ""
@@ -573,17 +608,26 @@ def generate_resolution_info_section(summary_data):
         </div>
         """)
     
+    chart_html = ""
+    if resolution_chart:
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{resolution_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        </div>
+        """
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📐 Resolution Information</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
             {''.join(resolution_items)}
         </div>
+        {chart_html}
     </div>
     """
 
 
-def generate_clustering_summary_section(clustering_summary):
+def generate_clustering_summary_section(clustering_summary, clustering_charts=None):
     """클러스터링 요약 섹션 HTML 생성"""
     if not clustering_summary:
         return ""
@@ -608,6 +652,22 @@ def generate_clustering_summary_section(clustering_summary):
         </div>
     </div>
     """
+    
+    # 클러스터링 차트들 추가
+    charts_html = ""
+    if clustering_charts:
+        if 'clustering_results' in clustering_charts:
+            charts_html += f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <img src="data:image/png;base64,{clustering_charts['clustering_results']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            </div>
+            """
+        if 'cluster_size_distribution' in clustering_charts:
+            charts_html += f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <img src="data:image/png;base64,{clustering_charts['cluster_size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            </div>
+            """
     
     # 클러스터 상세 테이블
     if clustering_summary.get('cluster_summary'):
@@ -643,9 +703,9 @@ def generate_clustering_summary_section(clustering_summary):
         </div>
         """
         
-        return summary_html + table_html
+        return summary_html + charts_html + table_html
     
-    return summary_html
+    return summary_html + charts_html
 
 
 def generate_xai_visualizations_container(xai_charts, title="🔬 Representative Sample Report"):

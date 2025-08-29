@@ -320,10 +320,10 @@ class EmbeddingAnalyzer:
         # 가중 평균 계산
         weighted_centroid = np.average(cluster_embeddings, axis=0, weights=weights)
         
-        # L2 정규화 (임베딩 벡터 특성 유지)
-        norm = np.linalg.norm(weighted_centroid)
-        if norm > 0:
-            weighted_centroid = weighted_centroid / norm
+        # L2 정규화는 선택적으로 적용 (센트로이드의 크기 정보 보존)
+        # norm = np.linalg.norm(weighted_centroid)
+        # if norm > 0:
+        #     weighted_centroid = weighted_centroid / norm
         
         return weighted_centroid
     
