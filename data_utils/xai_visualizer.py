@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')  # GUI 백엔드 비활성화로 메모리 사용량 최적화
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
@@ -7,6 +9,23 @@ from io import BytesIO
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
 import os
+import multiprocessing as mp
+from functools import partial
+
+
+# 전역 함수로 정의 (병렬 처리용)
+def process_single_visualization_wrapper(filename_xai_tuple):
+    """단일 XAI 결과를 처리하는 전역 함수 (병렬 처리용)"""
+    filename, xai_result = filename_xai_tuple
+    try:
+        # 각 프로세스에서 새로운 XAIVisualizer 인스턴스 생성
+        visualizer = XAIVisualizer()
+        # 개별 시각화 생성
+        visualizations = visualizer.create_comprehensive_visualization(xai_result)
+        return filename, visualizations
+    except Exception as e:
+        print(f"    ❌ Error processing {filename}: {e}")
+        return filename, {}
 
 
 class XAIVisualizer:
@@ -16,17 +35,69 @@ class XAIVisualizer:
         """XAI 시각화기 초기화"""
         plt.style.use('default')
         plt.rcParams['font.size'] = 14
+        # 메모리 최적화를 위한 설정
+        plt.rcParams['figure.max_open_warning'] = 0
+        plt.rcParams['figure.dpi'] = 100  # DPI 낮춰서 메모리 절약
+        
+        # 경고 메시지 억제
+        import warnings
+        warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        
+        # 이모지 폰트 문제 해결을 위한 설정
+        plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'AppleGothic', 'sans-serif']
     
 
     
+    def _safe_tight_layout(self, fig):
+        """안전한 tight_layout 적용"""
+        try:
+            fig.tight_layout()
+        except:
+            # tight_layout이 실패하면 수동으로 조정
+            fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1, hspace=0.3, wspace=0.3)
+    
     def fig_to_base64(self, fig: plt.Figure) -> str:
-        """matplotlib figure를 base64 인코딩된 이미지로 변환"""
-        buf = BytesIO()
-        fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-        buf.seek(0)
-        img_str = base64.b64encode(buf.getvalue()).decode()
-        buf.close()
-        return img_str
+        """matplotlib figure를 base64 인코딩된 이미지로 변환 (최적화됨)"""
+        try:
+            buf = BytesIO()
+            # DPI를 낮춰서 메모리 사용량 절약 (300 -> 150)
+            fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
+            buf.seek(0)
+            img_str = base64.b64encode(buf.getvalue()).decode()
+            buf.close()
+            # 즉시 figure 닫기로 메모리 해제
+            plt.close(fig)
+            return img_str
+        except Exception as e:
+            plt.close(fig)
+            raise e
+    
+    def create_comprehensive_visualization_batch(self, xai_results: List[Tuple[str, Dict]]) -> Dict[str, str]:
+        """여러 XAI 결과를 배치로 처리하여 시각화 생성 (병렬 처리)"""
+        if not xai_results:
+            return {}
+        
+        # CPU 코어 수에 따라 워커 수 결정 (최대 4개)
+        num_workers = min(4, mp.cpu_count())
+        
+        print(f"    🔄 Starting batch visualization with {num_workers} workers...")
+        
+        # 병렬 처리 실행 (전역 함수 사용)
+        with mp.Pool(processes=num_workers) as pool:
+            results = pool.map(process_single_visualization_wrapper, xai_results)
+        
+        # 결과 병합
+        all_visualizations = {}
+        for filename, visualizations in results:
+            if visualizations:
+                for viz_type, viz_data in visualizations.items():
+                    key = f"{filename}_{viz_type}"
+                    all_visualizations[key] = viz_data
+        
+        print(f"    ✅ Batch visualization completed: {len(all_visualizations)} visualizations")
+        return all_visualizations
     
     def visualize_connected_components(self, components_analysis: Dict) -> str:
         """Connected Components 분석 결과 시각화"""
@@ -140,7 +211,7 @@ Average Size: {active_pixels/num_components if num_components > 0 else 0:.1f} pi
         axes[1, 1].set_title('Detailed Analysis', fontsize=18, fontweight='bold')
         axes[1, 1].axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
     def visualize_entropy_analysis(self, entropy_results: Dict, cam_data: np.ndarray = None) -> str:
@@ -356,7 +427,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             axes[1, 1].set_title('Entropy Summary', fontsize=16, fontweight='bold')
             axes[1, 1].axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
     def visualize_centroid_analysis(self, centroids: Dict, cam_result: Dict = None) -> str:
@@ -548,7 +619,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                            fontsize=16, fontweight='bold')
             axes[1, 1].set_title('Coordinate Distribution', fontsize=12, fontweight='bold')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
 
@@ -736,7 +807,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                 verticalalignment='top', fontsize=12, fontweight='bold',
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7))
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
     def visualize_cam_threshold_analysis(self, cam_result: Dict, 
@@ -807,7 +878,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
             axes[2, i].set_title(f'CAM Overlay ({percentile}%)', fontsize=14, fontweight='bold')
             axes[2, i].axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
 
@@ -1080,7 +1151,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
 
 📏 Distribution:
 • IQR: {iqr:.4f}
-• Q50/Q25: {q50_val/q25_val:.2f}"""
+• Q50/Q25: {q50_val/q25_val:.2f if q25_val != 0 else 'N/A'}"""
             
             axes[2, 1].text(0.05, 0.95, summary_text, transform=axes[2, 1].transAxes, 
                            fontsize=14, verticalalignment='top',
@@ -1098,7 +1169,7 @@ Activation Ratio: {entropy_results.get('activation_ratio', 0):.3f}"""
                 ax.set_title('CAM Statistics', fontsize=16, fontweight='bold')
                 ax.axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
     
 
@@ -1273,7 +1344,7 @@ BBox Index: {overlap_results.get('largest_bbox_idx', 'N/A')}"""
                 ax.set_title('Error', fontsize=14, fontweight='bold')
                 ax.axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)
 
     def visualize_overlap_analysis(self, overlap_results: Dict, cam_result: Dict = None) -> str:
@@ -1471,5 +1542,5 @@ BBox Index: {overlap_results.get('largest_bbox_idx', 'N/A')}"""
                 ax.set_title('Error', fontsize=14, fontweight='bold')
                 ax.axis('off')
         
-        plt.tight_layout()
+        self._safe_tight_layout(fig)
         return self.fig_to_base64(fig)

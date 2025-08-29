@@ -365,7 +365,7 @@ class ImageAnalysisReport:
         }
     
     def create_xai_visualizations(self):
-        """XAI 분석 결과를 시각화합니다. (클러스터별 대표 이미지만)"""
+        """XAI 분석 결과를 시각화합니다. (클러스터별 대표 이미지만) - 최적화됨"""
         if not self.xai_data:
             print("ℹ️  No XAI data found. XAI visualizations skipped.")
             return {}
@@ -374,7 +374,6 @@ class ImageAnalysisReport:
             from data_utils.xai_visualizer import XAIVisualizer
             
             visualizer = XAIVisualizer()
-            visualizations = {}
             
             # 클러스터별 대표 이미지 선택
             representative_images = self._select_representative_images()
@@ -385,31 +384,26 @@ class ImageAnalysisReport:
             
             print(f"🔍 Processing {len(representative_images)} representative XAI analysis results...")
             
-            # 대표 이미지별 XAI 분석 결과 시각화
+            # 배치 처리를 위한 데이터 준비
+            xai_batch = []
             for filename in representative_images:
                 if filename in self.xai_data:
                     xai_result = self.xai_data[filename]
                     if isinstance(xai_result, dict):
-                        print()
-                        print(f"  🔍 Processing XAI data for representative image: {filename}")
-                        # print(f"    - Available keys: {list(xai_result.keys())}")
-                        
-                        # 시각화 생성 (create_comprehensive_visualization 사용)
-                        try:
-                            img_visualizations = visualizer.create_comprehensive_visualization(xai_result)
-                            
-                            # 파일명을 키로 사용하여 저장 (확장자 포함)
-                            for viz_type, viz_data in img_visualizations.items():
-                                key = f"{filename}_{viz_type}"
-                                visualizations[key] = viz_data
-                            
-                            print(f"  ✅ Processed XAI visualization for {filename} ({len(img_visualizations)} visualizations)")
-                        except Exception as viz_error:
-                            print(f"  ❌ Failed to create visualizations for {filename}: {viz_error}")
+                        xai_batch.append((filename, xai_result))
+                        print(f"  📋 Added {filename} to batch processing")
                     else:
                         print(f"  ⚠️  Skipping {filename}: not a dictionary")
                 else:
                     print(f"  ⚠️  Representative image {filename} not found in XAI data")
+            
+            if not xai_batch:
+                print("ℹ️  No valid XAI data for batch processing.")
+                return {}
+            
+            # 배치 시각화 생성 (병렬 처리)
+            print(f"🔄 Starting batch visualization for {len(xai_batch)} images...")
+            visualizations = visualizer.create_comprehensive_visualization_batch(xai_batch)
             
             print(f"🎨 Generated {len(visualizations)} XAI visualizations from {len(representative_images)} representative image")
             return visualizations
@@ -600,477 +594,93 @@ class ImageAnalysisReport:
         print(f"  - XAI charts: {len(xai_charts)} XAI visualizations")
         print(f"  - XAI summary: {'✅' if xai_summary else '❌'}")
         
-        # HTML 파트들을 동적으로 생성
-        html_parts = []
-        
-        # ===== 속성 및 임베딩 분석 섹션 시작 =====
-        html_parts.append("""
-        <div style="margin-bottom: 40px; padding: 25px; background: #f8f9fa; border-radius: 12px; border: 2px solid #e9ecef;">
-            <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #007bff; font-size: 1.6em;">
-                🖼️ Image Analysis Results (속성 및 임베딩 분석)
-            </h2>
-        """)
-        
-        # 1. 요약 통계 섹션 (항상 존재)
-        html_parts.append(f"""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📈 Summary Statistics</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Images</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{summary.get('total_images', 0):,}</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Size</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{summary.get('total_size_mb', 0):.2f} MB</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Average Size</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{summary.get('avg_size_mb', 0):.2f} MB</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Unique Formats</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{len(summary.get('formats', {}))}</div>
-                </div>
-            </div>
-        </div>
-        """)
-        
-        # 2. 형식별 분포 섹션 (형식 데이터가 있는 경우)
-        if summary.get('formats'):
+        # report_layout 모듈의 함수들을 사용하여 HTML 생성
+        try:
+            from report_generator.report_layout import (
+                generate_summary_statistics_section,
+                generate_format_distribution_section,
+                generate_visualizations_section,
+                generate_sample_images_section,
+                generate_detailed_statistics_section,
+                generate_embedding_info_section,
+                generate_resolution_info_section,
+                generate_clustering_summary_section,
+                generate_xai_analysis_section
+            )
+            
+            # HTML 파트들을 동적으로 생성
+            html_parts = []
+            
+            # ===== 속성 및 임베딩 분석 섹션 시작 =====
             html_parts.append("""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📋 Format Distribution</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+            <div style="margin-bottom: 40px; padding: 25px; background: #f8f9fa; border-radius: 12px; border: 2px solid #e9ecef;">
+                <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #007bff; font-size: 1.6em;">
+                    🖼️ Image Analysis Results (속성 및 임베딩 분석)
+                </h2>
             """)
             
-            for fmt, count in summary.get('formats', {}).items():
-                percentage = (count / summary['total_images']) * 100
-                html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">
-                        <span style="background: #e74c3c; color: white; padding: 3px 6px; border-radius: 8px; font-size: 0.7em; font-weight: bold;">{fmt.upper()}</span>
-                    </h4>
-                    <div style="font-size: 1.5em; font-weight: bold; color: #495057;">{count:,}</div>
-                    <p style="margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;">({percentage:.1f}%)</p>
-                </div>
-                """)
+            # 1. 요약 통계 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_summary_statistics_section(summary))
+        
+            # 2. 형식별 분포 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_format_distribution_section(summary))
             
+            # 3. 시각화 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_visualizations_section(charts))
+            
+            # 4. 샘플 이미지 테이블 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_sample_images_section(samples))
+            
+            # 5. 상세 통계 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_detailed_statistics_section(summary))
+            
+            # 6. 임베딩 정보 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_embedding_info_section(self.embed_data))
+            
+            # 7. 해상도 정보 섹션 (report_layout 모듈 사용)
+            html_parts.append(generate_resolution_info_section(summary))
+            
+            # 8. 클러스터링 요약 섹션 (report_layout 모듈 사용)
+            clustering_summary = self.create_clustering_summary()
+            html_parts.append(generate_clustering_summary_section(clustering_summary))
+        
+            # ===== 속성 및 임베딩 분석 섹션 종료 =====
             html_parts.append("""
             </div>
-        </div>
             """)
         
-        # 3. 시각화 섹션 (차트가 있는 경우)
-        if charts:
-            html_parts.append("""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📊 Visualizations</h3>
-        """)
-            
-            # 파일 크기 분포
-            if 'size_distribution' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 형식별 분포
-            if 'format_distribution' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['format_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 노이즈 vs 선명도
-            if 'noise_vs_sharpness' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['noise_vs_sharpness']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 해상도별 분포
-            if 'resolution_distribution' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['resolution_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 임베딩 PCA
-            if 'embeddings_pca' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['embeddings_pca']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 클러스터링 결과
-            if 'clustering_results' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['clustering_results']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            # 클러스터 크기 분포
-            if 'cluster_size_distribution' in charts:
-                html_parts.append(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{charts['cluster_size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            </div>
-                """)
-            
-            html_parts.append("""
-        </div>
-            """)
-        
-        # 4. 샘플 이미지 테이블 섹션 (샘플이 있는 경우)
-        if samples:
-            html_parts.append("""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🖼️ Sample Images (Top 10 by Size)</h3>
-            <table style="width: 100%; border-collapse: collapse; margin: 15px 0; border-radius: 5px; overflow: hidden; background: white;">
-                <thead>
-                    <tr>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Filename</th>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Size (MB)</th>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Format</th>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Resolution</th>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Noise Level</th>
-                        <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Sharpness</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """)
-            
-            for sample in samples:
-                html_parts.append(f"""
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{sample['filename']}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{sample['size_mb']}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">
-                            <span style="background: #e74c3c; color: white; padding: 2px 6px; border-radius: 8px; font-size: 0.8em; font-weight: bold;">{sample['format'].upper()}</span>
-                        </td>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{sample['resolution']}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{sample['noise_level']}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{sample['sharpness']}</td>
-                    </tr>
-                """)
-            
-            html_parts.append("""
-                </tbody>
-            </table>
-        </div>
-            """)
-        
-        # 5. 상세 통계 섹션 (통계 데이터가 있는 경우)
-        if summary.get('size_stats') or summary.get('noise_stats') or summary.get('sharpness_stats'):
-            html_parts.append("""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📊 Detailed Statistics</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-            """)
-            
-            if summary.get('size_stats'):
-                html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <h4 style="color: #495057; margin: 0 0 10px 0;">File Size Statistics</h4>
-                    <p style="margin: 5px 0; color: #6c757d;">Min: {summary.get('size_stats', {}).get('min', 0):.2f} MB</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Max: {summary.get('size_stats', {}).get('max', 0):.2f} MB</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Mean: {summary.get('size_stats', {}).get('mean', 0):.2f} MB</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Std: {summary.get('size_stats', {}).get('std', 0):.2f} MB</p>
-                </div>
-                """)
-            
-            if summary.get('noise_stats'):
-                html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <h4 style="color: #495057; margin: 0 0 10px 0;">Noise Level Statistics</h4>
-                    <p style="margin: 5px 0; color: #6c757d;">Min: {summary.get('noise_stats', {}).get('min', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Max: {summary.get('noise_stats', {}).get('max', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Mean: {summary.get('noise_stats', {}).get('mean', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Std: {summary.get('noise_stats', {}).get('std', 0):.4f}</p>
-                </div>
-                """)
-            
-            if summary.get('sharpness_stats'):
-                html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <h4 style="color: #495057; margin: 0 0 10px 0;">Sharpness Statistics</h4>
-                    <p style="margin: 5px 0; color: #6c757d;">Min: {summary.get('sharpness_stats', {}).get('min', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Max: {summary.get('sharpness_stats', {}).get('max', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Mean: {summary.get('sharpness_stats', {}).get('mean', 0):.4f}</p>
-                    <p style="margin: 5px 0; color: #6c757d;">Std: {summary.get('sharpness_stats', {}).get('std', 0):.4f}</p>
-                </div>
-                """)
-            
-            html_parts.append("""
-            </div>
-        </div>
-            """)
-        
-        # 6. 임베딩 정보 섹션 (임베딩 데이터가 있는 경우)
-        if self.embed_data:
-            embeddings = [item['embedding'] for item in self.embed_data.values()]
-            if embeddings:
-                embedding_dim = len(embeddings[0])
-                html_parts.append(f"""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🪐 Embedding Informations</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Embedding Dimension</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{embedding_dim}</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 8px 0; font-size: 0.9em;">Total Embeddings</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{len(embeddings):,}</div>
-                </div>
-            </div>
-        </div>
-                """)
-        
-        # 7. 해상도 정보 섹션 (해상도 데이터가 있는 경우)
-        if summary.get('resolutions'):
-            top_resolutions = dict(sorted(summary['resolutions'].items(), key=lambda x: x[1], reverse=True)[:5])
-            html_parts.append("""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📐 Resolution Information</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-            """)
-            
-            for res, count in top_resolutions.items():
-                percentage = (count / summary['total_images']) * 100
-                html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">{res}</h4>
-                    <div style="font-size: 1.5em; font-weight: bold; color: #495057;">{count:,}</div>
-                    <p style="margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;">({percentage:.1f}%)</p>
-                </div>
-                """)
-            
-            html_parts.append("""
-            </div>
-        </div>
-            """)
-        
-        # 8. 클러스터링 요약 섹션 (클러스터링 데이터가 있는 경우)
-        clustering_summary = self.create_clustering_summary()
-        if clustering_summary:
-            html_parts.append(f"""
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">🧠 Clustering Summary</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Method</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('method', 'N/A').upper()}</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Samples</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('total_samples', 0):,}</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                    <h4 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Clusters</h4>
-                    <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{clustering_summary.get('n_clusters', 0)}</div>
-                </div>
-            </div>
-        </div>
-            """)
-            
-            # 클러스터 상세 테이블
-            if clustering_summary.get('cluster_summary'):
-                html_parts.append("""
-            <div style="margin-top: 20px;">
-                <h4 style="color: #495057; margin-bottom: 10px;">Cluster Details</h4>
-                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; border-radius: 5px; overflow: hidden; background: white;">
-                    <thead>
-                        <tr>
-                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Cluster ID</th>
-                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Size</th>
-                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Percentage</th>
-                            <th style="background: #6c757d; color: white; padding: 10px; text-align: left;">Sample Files</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                """)
+            # ===== XAI 분석 섹션 시작 =====
+            # 9. XAI 분석 결과 섹션 (report_layout 모듈 사용)
+            if xai_summary or xai_charts:
+                print(f"🎨 Adding XAI section with {len(xai_charts)} visualizations and summary stats")
+            else:
+                print("ℹ️  No XAI data available, skipping XAI section")
                 
-                for cluster in clustering_summary['cluster_summary']:
-                    html_parts.append(f"""
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['cluster_id']}</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['size']:,}</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{cluster['percentage']:.1f}%</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #dee2e6;">
-                                <ul style="margin: 0; padding-left: 20px; list-style-type: none;">
-                                    {', '.join([f'<li>{f}' for f in cluster['sample_files']])}
-                                </ul>
-                            </td>
-                        </tr>
-                    """)
+            if xai_summary or xai_charts:
+                html_parts.append("""
+            <div style="margin-bottom: 40px; padding: 25px; background: #fff3cd; border-radius: 12px; border: 2px solid #ffc107;">
+                <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #ffc107; font-size: 1.6em;">
+                    🧠 XAI (Explainable AI) Analysis Results
+                </h2>
+            """)
+                
+                # XAI 분석 결과 섹션 (report_layout 모듈 사용)
+                html_parts.append(generate_xai_analysis_section(xai_summary, xai_charts))
                 
                 html_parts.append("""
-                    </tbody>
-                </table>
             </div>
                 """)
         
-        # ===== 속성 및 임베딩 분석 섹션 종료 =====
-        html_parts.append("""
-        </div>
-        """)
-        
-        # ===== XAI 분석 섹션 시작 =====
-        # 9. XAI 분석 결과 섹션 (XAI 데이터가 있는 경우)
-        if xai_summary or xai_charts:
-            print(f"🎨 Adding XAI section with {len(xai_charts)} visualizations and summary stats")
-        else:
-            print("ℹ️  No XAI data available, skipping XAI section")
+            # ===== XAI 분석 섹션 종료 =====
             
-        if xai_summary or xai_charts:
-            html_parts.append("""
-        <div style="margin-bottom: 40px; padding: 25px; background: #fff3cd; border-radius: 12px; border: 2px solid #ffc107;">
-            <h2 style="color: #495057; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #ffc107; font-size: 1.6em;">
-                🧠 XAI (Explainable AI) Analysis Results
-            </h2>
-        """)
+            return ''.join(html_parts)
             
-            # XAI 요약 통계 추가
-            if xai_summary:
-                html_parts.append(f"""
-            <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; border: 1px solid #dee2e6;">
-                <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">📊 XAI Analysis Summary</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Total Files Analyzed</h5>
-                        <div style="font-size: 1.8em; font-weight: bold; color: #495057;">{xai_summary.get('total_files', 0):,}</div>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">High Quality Analyses</h5>
-                        <div style="font-size: 1.8em; font-weight: bold; color: #28a745;">{xai_summary.get('quality_summary', {}).get('excellent', 0):,}</div>
-                        <small style="color: #6c757d;">IoU > 0.5</small>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Complex Patterns</h5>
-                        <div style="font-size: 1.8em; font-weight: bold; color: #ffc107;">{xai_summary.get('analysis_coverage', {}).get('complex_patterns', 0):,}</div>
-                        <small style="color: #6c757d;">> 5 components</small>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Representative Image</h5>
-                        <div style="font-size: 1.8em; font-weight: bold; color: #17a2b8;">{xai_summary.get('representative_info', {}).get('representative_images', 0):,}</div>
-                        <small style="color: #6c757d;">from {xai_summary.get('representative_info', {}).get('total_samples', 0):,} total samples</small>
-                    </div>
-                </div>
-            </div>
-                """)
-            
-            # XAI 시각화들을 시각화 타입별로 그룹화 (단일 대표 이미지)
-            viz_types = {}
-            for key, viz_data in xai_charts.items():
-                # 키 형식: "filename_viztype"에서 시각화 타입 추출
-                known_viz_types = [
-                    'cam_heatmap', 'cam_threshold_analysis', 'cam_distribution_analysis',
-                    'cam_statistics', 'connected_components', 'entropy_analysis',
-                    'centroid_analysis', 'overlap_analysis', 'overlap_statistics'
-                ]
-                
-                viz_type = None
-                # 알려진 시각화 타입으로 끝나는지 확인
-                for viz_type_name in known_viz_types:
-                    if key.endswith(f'_{viz_type_name}'):
-                        viz_type = viz_type_name
-                        break
-                
-                # 알려진 타입이 없으면 기본 분리 방식 사용
-                if viz_type is None:
-                    parts = key.split('_', 1)
-                    if len(parts) == 2:
-                        viz_type = parts[1]
-                    else:
-                        viz_type = 'unknown'
-                
-                viz_types[viz_type] = viz_data
-            
-            # XAI 분석 결과 컨테이너 시작
-            html_parts.append(f"""
-            <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 10px; border: 2px solid #ffc107;">
-                <h4 style="color: #495057; margin-bottom: 15px; border-bottom: 2px solid #ffc107; padding-bottom: 8px;">
-                    🔬 Representative Sample Report
-                </h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
-            """)
-            
-            # 시각화 타입별 제목 매핑
-            viz_titles = {
-                'cam_heatmap': '🔥 CAM Heatmap',
-                'cam_threshold_analysis': '🎯 Threshold Analysis',
-                'cam_distribution_analysis': '📊 Distribution Analysis',
-                'cam_statistics': '📈 CAM Statistics',
-                'connected_components': '🔗 Connected Components Analysis',
-                'entropy_analysis': '📊 Entropy Analysis',
-                'centroid_analysis': '🎯 Centroid Analysis',
-                'overlap_analysis': '🔍 Overlap Analysis',
-                'overlap_statistics': '📊 Overlap Statistics'
-            }
-            
-            # 원하는 순서로 시각화 타입 정렬
-            desired_order = [
-                'cam_heatmap',
-                'cam_statistics',
-                'cam_threshold_analysis',
-                'connected_components',
-                'entropy_analysis',
-                'centroid_analysis',
-                'overlap_analysis',
-                'overlap_statistics',
-                'cam_distribution_analysis'  # 기타 타입들은 마지막에
-            ]
-            
-            # 정렬된 순서로 시각화 출력
-            for viz_type in desired_order:
-                if viz_type in viz_types:
-                    viz_data = viz_types[viz_type]
-                    title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
-                    html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                    <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
-                    <div style="text-align: center;">
-                        <img src="data:image/png;base64,{viz_data}" 
-                             style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    </div>
-                </div>
-                    """)
-            
-            # 정렬되지 않은 기타 시각화 타입들도 출력
-            for viz_type, viz_data in viz_types.items():
-                if viz_type not in desired_order:
-                    title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
-                    html_parts.append(f"""
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                    <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
-                    <div style="text-align: center;">
-                        <img src="data:image/png;base64,{viz_data}" 
-                             style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    </div>
-                </div>
-                    """)
-            
-            # XAI 분석 결과 컨테이너 종료
-            html_parts.append("""
-                </div>
-            </div>
-            """)
-            
-            html_parts.append("""
-        </div>
-            """)
-        
-        # ===== XAI 분석 섹션 종료 =====
-        
-        return ''.join(html_parts)
+        except ImportError as e:
+            print(f"❌ Error importing report_layout functions: {e}")
+            return None
+        except Exception as e:
+            print(f"❌ Error generating HTML: {e}")
+            return None
 
 def create_report_body(directory):
     """report_layout.py에 맞는 HTML 본문만 생성합니다."""
