@@ -906,9 +906,14 @@ Method Descriptions:"""
 
     def visualize_cam_statistics(self, cam_stats: Dict, cam_data: np.ndarray = None) -> str:
         """CAM 통계 정보 시각화 - Percentile과 Skewness 분석 포함 (실제 CAM 데이터 사용)"""
+        print(f"    🔍 Starting CAM statistics visualization...")
+        print(f"    📊 CAM stats type: {type(cam_stats)}")
+        print(f"    📋 CAM stats keys: {list(cam_stats.keys()) if cam_stats else 'None'}")
+        
         fig, axes = plt.subplots(3, 2, figsize=(12, 18))
         
         try:
+            print(f"    📈 Step 1: Extracting CAM stats values...")
             # CAM stats에서 직접 값 추출 (튜플 구조 처리)
             def extract_stat_value(stat_name, default_value=0):
                 """CAM stats에서 값을 추출하는 헬퍼 함수"""
@@ -933,7 +938,10 @@ Method Descriptions:"""
             high_activation_ratio = extract_stat_value('high_activation_ratio', 15.0)
             total_pixels = extract_stat_value('total_pixels', 50176)  # 224x224 기본값
             
+            print(f"    📊 Extracted values: mean={mean_val:.4f}, max={max_val:.4f}, std={std_val:.4f}")
+            
             # 1. CAM Value Distribution (Boxplot)
+            print(f"    📈 Step 2: Creating CAM Value Distribution chart...")
             q25_val = extract_stat_value('q25', 0)
             q50_val = extract_stat_value('q50', 0)
             q75_val = extract_stat_value('q75', 0)
@@ -952,7 +960,10 @@ Method Descriptions:"""
                            verticalalignment='top', fontsize=12, fontweight='bold',
                            bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
             
+            print(f"    ✅ CAM Value Distribution chart completed")
+            
             # 2. Percentile Analysis (기존 Quartile Analysis 대체)
+            print(f"    📈 Step 3: Creating Percentile Analysis chart...")
             percentiles = cam_stats.get('percentiles', {})
             if percentiles:
                 percentile_names = list(percentiles.keys())
@@ -1006,7 +1017,10 @@ Method Descriptions:"""
                                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
                 axes[0, 1].set_title('CAM Activation Percentiles', fontsize=16, fontweight='bold')
             
+            print(f"    ✅ Percentile Analysis chart completed")
+            
             # 3. 임계값별 활성화 분석
+            print(f"    📈 Step 4: Creating Activation Ratio vs Threshold chart...")
             thresholds = np.linspace(0, max_val, 20)
             activation_ratios = []
             
@@ -1052,7 +1066,10 @@ Method Descriptions:"""
                                bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.7),
                                fontsize=12, fontweight='bold')
             
+            print(f"    ✅ Activation Ratio vs Threshold chart completed")
+            
             # 4. Skewness Analysis (기존 CAM Value Histogram 대체)
+            print(f"    📈 Step 5: Creating Skewness Analysis chart...")
             skewness = cam_stats.get('skewness', 0)
             percentile_skewness = cam_stats.get('percentile_skewness', 0)
             skewness_type = cam_stats.get('skewness_type', 'unknown')
@@ -1097,7 +1114,10 @@ Method Descriptions:"""
                                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', alpha=0.8))
                 axes[1, 1].set_title('Skewness Analysis', fontsize=16, fontweight='bold')
             
+            print(f"    ✅ Skewness Analysis chart completed")
+            
             # 5. 품질 지표 (Quality Metrics)
+            print(f"    📈 Step 6: Creating Quality Metrics chart...")
             # 집중도 (Concentration) - 높은 값일수록 활성화가 집중됨
             concentration = (max_val - mean_val) / (max_val - min_val) if max_val != min_val else 0
             
@@ -1106,6 +1126,11 @@ Method Descriptions:"""
             
             # 신뢰도 (Confidence) - 활성화 비율과 평균값의 조합
             confidence = (high_activation_ratio / 100) * (mean_val / max_val) if max_val > 0 else 0
+            
+            # 값이 NaN이나 무한대인 경우 0으로 설정
+            concentration = 0 if np.isnan(concentration) or np.isinf(concentration) else concentration
+            uniformity = 0 if np.isnan(uniformity) or np.isinf(uniformity) else uniformity
+            confidence = 0 if np.isnan(confidence) or np.isinf(confidence) else confidence
             
             quality_metrics = ['Concentration', 'Uniformity', 'Confidence']
             quality_values = [concentration, uniformity, confidence]
@@ -1132,15 +1157,28 @@ Method Descriptions:"""
                                f'{value:.3f}', ha='center', va=va, fontsize=12, fontweight='bold',
                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
             
+            print(f"    ✅ Quality Metrics chart completed")
+            
             # 6. 종합 요약 (Comprehensive Summary)
+            print(f"    📈 Step 7: Creating Comprehensive Summary...")
             iqr = q75_val - q25_val
+            
+            # Q50/Q25 비율을 안전하게 계산
+            q50_q25_ratio = q50_val/q25_val if q25_val != 0 else 0
+            q50_q25_text = f"{q50_q25_ratio:.2f}" if q50_q25_ratio > 0 else "N/A"
+            
+            # 모든 값이 유효한지 확인
+            mean_display = f"{mean_val:.4f}" if not np.isnan(mean_val) and not np.isinf(mean_val) else "N/A"
+            std_display = f"{std_val:.4f}" if not np.isnan(std_val) and not np.isinf(std_val) else "N/A"
+            range_display = f"{max_val-min_val:.4f}" if not np.isnan(max_val-min_val) and not np.isinf(max_val-min_val) else "N/A"
+            iqr_display = f"{iqr:.4f}" if not np.isnan(iqr) and not np.isinf(iqr) else "N/A"
             
             summary_text = f"""CAM Analysis Summary:
 
 Basic Stats:
-• Mean: {mean_val:.4f}
-• Std Dev: {std_val:.4f}
-• Range: {max_val-min_val:.4f}
+• Mean: {mean_display}
+• Std Dev: {std_display}
+• Range: {range_display}
 
 Activation:
 • High Act. Ratio: {high_activation_ratio:.1f}%
@@ -1152,8 +1190,8 @@ Quality Scores:
 • Confidence: {confidence:.3f}
 
 Distribution:
-• IQR: {iqr:.4f}
-• Q50/Q25: {q50_val/q25_val:.2f if q25_val != 0 else 'N/A'}"""
+• IQR: {iqr_display}
+• Q50/Q25: {q50_q25_text}"""
             
             axes[2, 1].text(0.05, 0.95, summary_text, transform=axes[2, 1].transAxes, 
                            fontsize=14, verticalalignment='top',
@@ -1161,7 +1199,13 @@ Distribution:
             axes[2, 1].set_title('Comprehensive Summary', fontsize=16, fontweight='bold')
             axes[2, 1].axis('off')
             
+            print(f"    ✅ Comprehensive Summary completed")
+            print(f"    🎉 All CAM statistics charts completed successfully!")
+            
         except Exception as e:
+            print(f"    ❌ Error in visualize_cam_statistics: {e}")
+            import traceback
+            traceback.print_exc()
             # 오류 발생 시 간단한 메시지 표시
             for ax in axes.flat:
                 ax.text(0.5, 0.5, 'CAM Statistics\nNot Available', 

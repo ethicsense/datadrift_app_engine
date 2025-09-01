@@ -240,7 +240,7 @@ class ImageAnalysisReport:
         if top_resolutions:
             plt.figure(figsize=(12, 6))
             plt.bar(range(len(top_resolutions)), list(top_resolutions.values()), color='lightgreen')
-            plt.title('Top 10 Resolution Distribution', fontsize=14, fontweight='bold')
+            plt.title('Resolution Distribution (Top 10)', fontsize=14, fontweight='bold')
             plt.xlabel('Resolution')
             plt.ylabel('Count')
             plt.xticks(range(len(top_resolutions)), list(top_resolutions.keys()), rotation=45, ha='right')
@@ -260,9 +260,9 @@ class ImageAnalysisReport:
         
         plt.figure(figsize=(10, 6))
         plt.scatter(noise_levels, sharpness_values, alpha=0.6, color='coral')
-        plt.title('Noise Level vs Sharpness', fontsize=14, fontweight='bold')
+        plt.title('Noise Level vs Edgeness', fontsize=14, fontweight='bold')
         plt.xlabel('Noise Level')
-        plt.ylabel('Sharpness')
+        plt.ylabel('Edgeness')
         plt.grid(True, alpha=0.3)
         charts['noise_vs_sharpness'] = self.fig_to_base64()
         plt.close()
@@ -350,49 +350,33 @@ class ImageAnalysisReport:
                                 text_color = 'green'  # 작은 차이
                                 alpha = 0.7
                             
-                            # 클러스터 외곽에 레이블 배치를 위한 위치 계산
-                            cluster_indices = np.where(cluster_labels == i)[0]
-                            cluster_points = embeddings_2d[cluster_indices]
-                            
-                            if len(cluster_points) > 0:
-                                # 클러스터의 중심점 계산
-                                cluster_center = np.mean(cluster_points, axis=0)
-                                
-                                # 클러스터의 반지름 계산 (중심에서 가장 먼 점까지의 거리)
-                                distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
-                                cluster_radius = np.max(distances_from_center)
-                                
-                                # 레이블을 클러스터 외곽에 배치 (반지름의 1.3배 거리)
-                                label_distance = cluster_radius * 1.3
-                                
-                                # 중심점에서 가장 멀리 있는 방향으로 레이블 배치
-                                if cluster_radius > 0:
-                                    # 가장 멀리 있는 점의 방향 계산
-                                    max_dist_idx = np.argmax(distances_from_center)
-                                    direction = cluster_points[max_dist_idx] - cluster_center
-                                    direction = direction / np.linalg.norm(direction)
-                                    
-                                    # 레이블 위치 계산
-                                    label_x = cluster_center[0] + direction[0] * label_distance
-                                    label_y = cluster_center[1] + direction[1] * label_distance
-                                else:
-                                    # 클러스터가 한 점인 경우 센트로이드 근처에 배치
-                                    label_x = centroids_2d[i, 0] + 0.1
-                                    label_y = centroids_2d[i, 1] + 0.1
-                                
-                                # 통합된 레이블 표시 (클러스터 번호 + 거리)
-                                plt.annotate(f'C{i} (d={distance:.3f})', 
-                                           (label_x, label_y),
-                                           xytext=(0, 0), textcoords='offset points',
-                                           fontsize=10, color=text_color, fontweight='bold',
-                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=alpha, edgecolor=cluster_colors[i], linewidth=1.5))
-                            
                             # 두 센트로이드를 연결하는 선 그리기 (클러스터별 색상)
                             plt.plot([centroids_2d[i, 0], centroids_high_dim_2d[i, 0]], 
                                    [centroids_2d[i, 1], centroids_high_dim_2d[i, 1]], 
                                    color=cluster_colors[i], linestyle='--', alpha=0.6, linewidth=1.5)
+                            
+                            # 거리 정보를 점선의 중간 지점에 표시
+                            mid_x = (centroids_2d[i, 0] + centroids_high_dim_2d[i, 0]) / 2
+                            mid_y = (centroids_2d[i, 1] + centroids_high_dim_2d[i, 1]) / 2
+                            
+                            # 거리 정보 텍스트 표시 (점선 중간에)
+                            plt.annotate(f'd={distance:.3f}', 
+                                       (mid_x, mid_y),
+                                       xytext=(0, 0), textcoords='offset points',
+                                       fontsize=9, color=text_color, fontweight='bold',
+                                       bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=alpha, edgecolor=cluster_colors[i], linewidth=1.0),
+                                       ha='center', va='center')
                         
-                        title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\nX: 2D Centroids, O: High-Dim Centroids (PCA) - Same color = Same cluster'
+                        # 클러스터 번호를 2D 센트로이드 지점에 워터마크처럼 표시
+                        for i in range(n_clusters):
+                            plt.annotate(f'C{i}', 
+                                       (centroids_2d[i, 0], centroids_2d[i, 1]),
+                                       xytext=(0, 0), textcoords='offset points',
+                                       fontsize=45, color=cluster_colors[i], fontweight='bold',
+                                       alpha=0.3,  # 낮은 투명도로 워터마크 효과
+                                       ha='center', va='center')
+                        
+                        title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\nSame color = Same cluster'
                         
                     except Exception as e:
                         print(f"⚠️ Error projecting high-dimensional centroids: {e}")
@@ -402,32 +386,14 @@ class ImageAnalysisReport:
                                        c=[cluster_colors[i]], marker='x', s=200, linewidths=3, 
                                        label=f'C{i} Centroid' if i == 0 else "")
                         
-                        # 클러스터 번호를 클러스터 외곽에 표시
+                        # 클러스터 번호를 2D 센트로이드 지점에 워터마크처럼 표시
                         for i in range(n_clusters):
-                            cluster_indices = np.where(cluster_labels == i)[0]
-                            cluster_points = embeddings_2d[cluster_indices]
-                            
-                            if len(cluster_points) > 0:
-                                cluster_center = np.mean(cluster_points, axis=0)
-                                distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
-                                cluster_radius = np.max(distances_from_center)
-                                label_distance = cluster_radius * 1.3
-                                
-                                if cluster_radius > 0:
-                                    max_dist_idx = np.argmax(distances_from_center)
-                                    direction = cluster_points[max_dist_idx] - cluster_center
-                                    direction = direction / np.linalg.norm(direction)
-                                    label_x = cluster_center[0] + direction[0] * label_distance
-                                    label_y = cluster_center[1] + direction[1] * label_distance
-                                else:
-                                    label_x = centroids_2d[i, 0] + 0.1
-                                    label_y = centroids_2d[i, 1] + 0.1
-                                
-                                plt.annotate(f'C{i}', 
-                                           (label_x, label_y),
-                                           xytext=(0, 0), textcoords='offset points',
-                                           fontsize=10, fontweight='bold', color=cluster_colors[i],
-                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor=cluster_colors[i], linewidth=1.5))
+                            plt.annotate(f'C{i}', 
+                                       (centroids_2d[i, 0], centroids_2d[i, 1]),
+                                       xytext=(0, 0), textcoords='offset points',
+                                       fontsize=45, color=cluster_colors[i], fontweight='bold',
+                                       alpha=0.3,  # 낮은 투명도로 워터마크 효과
+                                       ha='center', va='center')
                         
                         title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids (X markers)'
                 else:
@@ -439,32 +405,14 @@ class ImageAnalysisReport:
                                    c=[cluster_colors[i]], marker='x', s=200, linewidths=3, 
                                    label=f'C{i} Centroid' if i == 0 else "")
                     
-                    # 클러스터 번호를 클러스터 외곽에 표시
+                    # 클러스터 번호를 2D 센트로이드 지점에 워터마크처럼 표시
                     for i in range(n_clusters):
-                        cluster_indices = np.where(cluster_labels == i)[0]
-                        cluster_points = embeddings_2d[cluster_indices]
-                        
-                        if len(cluster_points) > 0:
-                            cluster_center = np.mean(cluster_points, axis=0)
-                            distances_from_center = np.linalg.norm(cluster_points - cluster_center, axis=1)
-                            cluster_radius = np.max(distances_from_center)
-                            label_distance = cluster_radius * 1.3
-                            
-                            if cluster_radius > 0:
-                                max_dist_idx = np.argmax(distances_from_center)
-                                direction = cluster_points[max_dist_idx] - cluster_center
-                                direction = direction / np.linalg.norm(direction)
-                                label_x = cluster_center[0] + direction[0] * label_distance
-                                label_y = cluster_center[1] + direction[1] * label_distance
-                            else:
-                                label_x = centroids_2d[i, 0] + 0.1
-                                label_y = centroids_2d[i, 1] + 0.1
-                            
-                            plt.annotate(f'C{i}', 
-                                       (label_x, label_y),
-                                       xytext=(0, 0), textcoords='offset points',
-                                       fontsize=10, fontweight='bold', color=cluster_colors[i],
-                                       bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor=cluster_colors[i], linewidth=1.5))
+                        plt.annotate(f'C{i}', 
+                                   (centroids_2d[i, 0], centroids_2d[i, 1]),
+                                   xytext=(0, 0), textcoords='offset points',
+                                   fontsize=45, color=cluster_colors[i], fontweight='bold',
+                                   alpha=0.3,  # 낮은 투명도로 워터마크 효과
+                                   ha='center', va='center')
                     
                     title_text = f'Clustering Results - {method.upper()} ({n_clusters} clusters)\n2D Density-Weighted Centroids (X markers)'
             
