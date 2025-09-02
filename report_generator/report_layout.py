@@ -5,6 +5,110 @@ import os
 # 캐시 매니저 import (분석 데이터용)
 from cache_utils.cache_manager import get_cache_manager, get_cached_html_content, get_cached_analysis_data, save_analysis_data
 
+# 차트 설명 생성기 import
+from .guideline_generator import ChartDescriptionGenerator
+
+# 차트 설명 생성기 인스턴스 생성
+chart_description_generator = ChartDescriptionGenerator()
+
+def add_chart_description(chart_key, chart_html):
+    """차트에 설명을 추가하는 함수"""
+    description_html = chart_description_generator.generate_description_html(chart_key)
+    if description_html:
+        return f"""
+        <div class="chart-with-description">
+            {chart_html}
+            {description_html}
+        </div>
+        """
+    return chart_html
+
+def add_chart_descriptions_to_section(section_html, chart_keys):
+    """섹션 내의 차트들에 설명을 추가하는 함수"""
+    if not chart_keys:
+        return section_html
+    
+    # 각 차트 키에 대해 설명 추가
+    for chart_key in chart_keys:
+        if chart_key in chart_description_generator.descriptions:
+            # 차트 이미지나 차트 관련 HTML을 찾아서 설명 추가
+            # 여기서는 간단하게 차트 제목을 찾아서 설명을 추가하는 방식 사용
+            title_pattern = f'<h[1-6][^>]*>{chart_description_generator.descriptions[chart_key]["title"]}</h[1-6]>'
+            import re
+            if re.search(title_pattern, section_html):
+                # 차트 제목 다음에 설명 추가
+                section_html = re.sub(
+                    title_pattern,
+                    f'\\g<0>{chart_description_generator.generate_description_html(chart_key)}',
+                    section_html
+                )
+    
+    return section_html
+
+def generate_chart_description_css():
+    """차트 설명을 위한 CSS 스타일 생성"""
+    return """
+    <style>
+        .chart-description {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .description-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #007bff;
+        }
+        
+        .description-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+        
+        .description-title {
+            font-weight: bold;
+            color: #495057;
+            font-size: 1.1em;
+        }
+        
+        .description-content {
+            color: #6c757d;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+        
+        .chart-with-description {
+            margin: 20px 0;
+        }
+        
+        .chart-description-summary {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 10px 0;
+        }
+        
+        .chart-description-summary h4 {
+            color: #495057;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+        
+        .chart-description-summary p {
+            color: #6c757d;
+            margin: 0;
+            line-height: 1.5;
+        }
+    </style>
+    """
+
 # HTML에서 <body> 태그만 추출하고 h1 태그 제거
 def get_html_body(html):
     if not html:
@@ -158,6 +262,7 @@ def generate_combined_html(dataset_name=None, database_export_report=None, drift
                                     border-radius: 5px; color: #6c757d;
                                 }}
                             </style>
+                            {generate_chart_description_css()}
                         </head>
                         <body>
                             <div class="container">
@@ -319,6 +424,11 @@ def generate_summary_statistics_section(summary_data, size_chart=None):
         </div>
         """
     
+    # 차트 설명 추가
+    chart_description = ""
+    if size_chart and chart_description_generator:
+        chart_description = chart_description_generator.generate_description_html('file_size_distribution')
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📈 Summary Statistics</h3>
@@ -341,6 +451,7 @@ def generate_summary_statistics_section(summary_data, size_chart=None):
             </div>
         </div>
         {chart_html}
+        {chart_description}
     </div>
     """
 
@@ -371,6 +482,11 @@ def generate_format_distribution_section(summary_data, format_chart=None):
         </div>
         """
     
+    # 차트 설명 추가
+    chart_description = ""
+    if format_chart and chart_description_generator:
+        chart_description = chart_description_generator.generate_description_html('image_format_distribution')
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📋 Format Distribution</h3>
@@ -378,6 +494,7 @@ def generate_format_distribution_section(summary_data, format_chart=None):
             {''.join(format_items)}
         </div>
         {chart_html}
+        {chart_description}
     </div>
     """
 
@@ -544,6 +661,11 @@ def generate_detailed_statistics_section(summary_data, quality_chart=None):
         </div>
         """
     
+    # 차트 설명 추가
+    chart_description = ""
+    if quality_chart and chart_description_generator:
+        chart_description = chart_description_generator.generate_description_html('noise_vs_sharpness')
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📊 Detailed Statistics</h3>
@@ -552,6 +674,7 @@ def generate_detailed_statistics_section(summary_data, quality_chart=None):
             {sharpness_html}
         </div>
         {chart_html}
+        {chart_description}
     </div>
     """
 
@@ -567,10 +690,15 @@ def generate_embedding_info_section(embed_data, embedding_chart=None):
     chart_html = ""
     if embedding_chart:
         chart_html = f"""
-        <div style="text-align: center; margin: 20px 0;">
+        <div style="text-align:center; margin: 20px 0;">
             <img src="data:image/png;base64,{embedding_chart}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
         </div>
         """
+    
+    # 차트 설명 추가
+    chart_description = ""
+    if embedding_chart and chart_description_generator:
+        chart_description = chart_description_generator.generate_description_html('embeddings_pca')
     
     return f"""
     <div style="margin-bottom: 20px;">
@@ -586,6 +714,7 @@ def generate_embedding_info_section(embed_data, embedding_chart=None):
             </div>
         </div>
         {chart_html}
+        {chart_description}
     </div>
     """
 
@@ -616,6 +745,11 @@ def generate_resolution_info_section(summary_data, resolution_chart=None):
         </div>
         """
     
+    # 차트 설명 추가
+    chart_description = ""
+    if resolution_chart and chart_description_generator:
+        chart_description = chart_description_generator.generate_description_html('resolution_distribution')
+    
     return f"""
     <div style="margin-bottom: 20px;">
         <h3 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">📐 Resolution Information</h3>
@@ -623,6 +757,7 @@ def generate_resolution_info_section(summary_data, resolution_chart=None):
             {''.join(resolution_items)}
         </div>
         {chart_html}
+        {chart_description}
     </div>
     """
 
@@ -653,20 +788,28 @@ def generate_clustering_summary_section(clustering_summary, clustering_charts=No
     </div>
     """
     
-    # 클러스터링 차트들 추가
+    # 클러스터링 차트들 추가 (각 차트 아래에 설명 포함)
     charts_html = ""
     if clustering_charts:
         if 'clustering_results' in clustering_charts:
+            chart_description = ""
+            if chart_description_generator:
+                chart_description = chart_description_generator.generate_description_html('clustering_results')
             charts_html += f"""
             <div style="text-align: center; margin: 20px 0;">
                 <img src="data:image/png;base64,{clustering_charts['clustering_results']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
+            {chart_description}
             """
         if 'cluster_size_distribution' in clustering_charts:
+            chart_description = ""
+            if chart_description_generator:
+                chart_description = chart_description_generator.generate_description_html('cluster_size_distribution')
             charts_html += f"""
             <div style="text-align: center; margin: 20px 0;">
                 <img src="data:image/png;base64,{clustering_charts['cluster_size_distribution']}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             </div>
+            {chart_description}
             """
     
     # 클러스터 상세 테이블
@@ -785,6 +928,26 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
         if viz_type in viz_types:
             viz_data = viz_types[viz_type]
             title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
+            
+            # 차트 설명 추가
+            chart_description = ""
+            if chart_description_generator:
+                # XAI 차트 키 매핑
+                xai_chart_keys = {
+                    'cam_heatmap': 'cam_distribution',
+                    'cam_statistics': 'cam_statistics',
+                    'cam_threshold_analysis': 'adaptive_cam_analysis',
+                    'connected_components': 'connected_components_analysis',
+                    'entropy_analysis': 'cam_entropy_analysis',
+                    'centroid_analysis': 'cam_centroid_analysis',
+                    'overlap_analysis': 'object_detection_cam_overlay',
+                    'overlap_statistics': 'object_detection_performance_summary',
+                    'cam_distribution_analysis': 'cam_distribution'
+                }
+                chart_key = xai_chart_keys.get(viz_type)
+                if chart_key:
+                    chart_description = chart_description_generator.generate_description_html(chart_key)
+            
             html_parts.append(f"""
         <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
             <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
@@ -792,6 +955,7 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
                 <img src="data:image/png;base64,{viz_data}" 
                      style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             </div>
+            {chart_description}
         </div>
             """)
     
@@ -799,6 +963,26 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
     for viz_type, viz_data in viz_types.items():
         if viz_type not in desired_order:
             title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
+            
+            # 차트 설명 추가
+            chart_description = ""
+            if chart_description_generator:
+                # XAI 차트 키 매핑
+                xai_chart_keys = {
+                    'cam_heatmap': 'cam_distribution',
+                    'cam_statistics': 'cam_statistics',
+                    'cam_threshold_analysis': 'adaptive_cam_analysis',
+                    'connected_components': 'connected_components_analysis',
+                    'entropy_analysis': 'cam_entropy_analysis',
+                    'centroid_analysis': 'cam_centroid_analysis',
+                    'overlap_analysis': 'object_detection_cam_overlay',
+                    'overlap_statistics': 'object_detection_performance_summary',
+                    'cam_distribution_analysis': 'cam_distribution'
+                }
+                chart_key = xai_chart_keys.get(viz_type)
+                if chart_key:
+                    chart_description = chart_description_generator.generate_description_html(chart_key)
+            
             html_parts.append(f"""
         <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
             <h5 style="color: #495057; margin-bottom: 10px; font-size: 1.1em;">{title}</h5>
@@ -806,6 +990,7 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
                 <img src="data:image/png;base64,{viz_data}" 
                      style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             </div>
+            {chart_description}
         </div>
             """)
     
