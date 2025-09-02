@@ -16,6 +16,53 @@ warnings.filterwarnings('ignore')
 # 캐시 매니저 import
 from cache_utils.cache_manager import get_cached_analysis_data
 
+# 차트 설명 생성기 import
+try:
+    from .guideline_generator import ChartDescriptionGenerator
+except ImportError:
+    try:
+        from guideline_generator import ChartDescriptionGenerator
+    except ImportError:
+        ChartDescriptionGenerator = None
+
+# 차트 설명 생성기 인스턴스 생성
+chart_description_generator = ChartDescriptionGenerator() if ChartDescriptionGenerator else None
+
+def add_chart_description_to_report(chart_key, chart_html):
+    """차트에 설명을 추가하는 함수"""
+    if not chart_description_generator:
+        return chart_html
+        
+    description_html = chart_description_generator.generate_description_html(chart_key)
+    if description_html:
+        return f"""
+        <div class="chart-with-description">
+            {chart_html}
+            {description_html}
+        </div>
+        """
+    return chart_html
+
+def add_chart_descriptions_to_section(section_html, chart_keys):
+    """섹션 내의 차트들에 설명을 추가하는 함수"""
+    if not chart_description_generator or not chart_keys:
+        return section_html
+    
+    # 각 차트 키에 대해 설명 추가
+    for chart_key in chart_keys:
+        if chart_key in chart_description_generator.descriptions:
+            # 차트 제목을 찾아서 설명 추가
+            title_pattern = f'<h[1-6][^>]*>{chart_description_generator.descriptions[chart_key]["title"]}</h[1-6]>'
+            import re
+            if re.search(title_pattern, section_html):
+                section_html = re.sub(
+                    title_pattern,
+                    f'\\g<0>{chart_description_generator.generate_description_html(chart_key)}',
+                    section_html
+                )
+    
+    return section_html
+
 # XAI 가이드라인 생성기 import
 try:
     from .xai_guideline_generator import create_xai_guideline
