@@ -9,8 +9,7 @@ from .cache_manager import (
     get_cache_manager,
     get_cached_html_content,
     get_cached_analysis_data,
-    save_analysis_data,
-    global_cache_manager
+    save_analysis_data
 )
 
 __all__ = [
@@ -18,6 +17,5 @@ __all__ = [
     'get_cache_manager',
     'get_cached_html_content',
     'get_cached_analysis_data',
-    'save_analysis_data',
-    'global_cache_manager'
+    'save_analysis_data'
 ] 
