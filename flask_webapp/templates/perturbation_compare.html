@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perturbation Analysis Comparison</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .page-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 2rem;
+        }
+        
+        .comparison-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .image-comparison {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .image-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .image-container img {
+            width: 100%;
+            height: auto;
+            transition: transform 0.3s ease;
+        }
+        
+        .image-container:hover img {
+            transform: scale(1.05);
+        }
+        
+        .image-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .stats-comparison {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.2);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .change-indicator {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
+        .change-positive {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .change-negative {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .change-neutral {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .perturbation-comparison {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .perturbation-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .perturbation-item:last-child {
+            border-bottom: none;
+        }
+        
+        .perturbation-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .perturbation-values {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .value-original {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .value-updated {
+            color: #007bff;
+            font-weight: 600;
+        }
+        
+        .detection-comparison {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .detection-item {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .detection-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.2);
+        }
+        
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #495057;
+        }
+        
+        .detection-confidence {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .confidence-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        .confidence-original {
+            color: #6c757d;
+        }
+        
+        .confidence-updated {
+            color: #007bff;
+        }
+        
+        .back-button {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- 페이지 헤더 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="comparison-header">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h1 class="page-title mb-2">
+                                <i class="bi bi-arrow-left-right"></i> Perturbation Analysis Comparison
+                            </h1>
+                            <p class="mb-0">Compare original and updated perturbation analysis results</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn back-button" onclick="goBack()">
+                                <i class="bi bi-arrow-left"></i> Back to Results
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 프로젝트 정보 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="stats-comparison">
+                    <h5 class="mb-3"><i class="bi bi-info-circle"></i> Project Information</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value text-primary" id="projectName">-</div>
+                                <div class="stat-label">Project Name</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value text-info" id="originalTimestamp">-</div>
+                                <div class="stat-label">Original Analysis</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value text-success" id="updatedTimestamp">-</div>
+                                <div class="stat-label">Updated Analysis</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value text-warning" id="timeDifference">-</div>
+                                <div class="stat-label">Time Difference</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 이미지 비교 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="image-comparison">
+                    <h5 class="mb-4"><i class="bi bi-images"></i> Inference Results Comparison</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img id="originalInference" src="" alt="Original Inference">
+                                <div class="image-label">Original Inference</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="image-container">
+                                <img id="updatedInference" src="" alt="Updated Inference">
+                                <div class="image-label">Updated Inference</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 비교 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="stats-comparison">
+                    <h5 class="mb-4"><i class="bi bi-bar-chart"></i> Detection Statistics Comparison</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value" id="originalObjectCount">-</div>
+                                <div class="stat-label">Original Objects</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value" id="updatedObjectCount">-</div>
+                                <div class="stat-label">Updated Objects</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value" id="objectCountChange">-</div>
+                                <div class="stat-label">Object Count Change</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card text-center">
+                                <div class="stat-value" id="detectionRateChange">-</div>
+                                <div class="stat-label">Detection Rate Change</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 교란 설정 비교 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="perturbation-comparison">
+                    <h5 class="mb-4"><i class="bi bi-gear"></i> Perturbation Settings Comparison</h5>
+                    <div id="perturbationComparisonList">
+                        <!-- 동적으로 생성될 교란 설정 비교 항목들 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 객체별 검출 결과 비교 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="detection-comparison">
+                    <h5 class="mb-4"><i class="bi bi-search"></i> Object Detection Comparison</h5>
+                    <div id="detectionComparisonList">
+                        <!-- 동적으로 생성될 검출 결과 비교 항목들 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 페이지 로드 시 데이터 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            loadComparisonData();
+        });
+
+        // 비교 데이터 로드
+        function loadComparisonData() {
+            // URL 파라미터에서 프로젝트 정보 가져오기
+            const urlParams = new URLSearchParams(window.location.search);
+            const projectName = urlParams.get('project');
+            const originalTimestamp = urlParams.get('original');
+            const comparisonTimestamp = urlParams.get('comparison');
+            const caDirectory = urlParams.get('ca');
+
+            console.log('Current URL:', window.location.href);
+            console.log('Search params:', window.location.search);
+            console.log('URL parameters:', {
+                project: projectName,
+                original: originalTimestamp,
+                comparison: comparisonTimestamp,
+                ca: caDirectory
+            });
+
+            if (!projectName || !originalTimestamp || !comparisonTimestamp || !caDirectory) {
+                console.error('Missing required parameters:', {
+                    project: projectName,
+                    original: originalTimestamp,
+                    comparison: comparisonTimestamp,
+                    ca: caDirectory
+                });
+                return;
+            }
+
+            // 프로젝트 정보 표시
+            document.getElementById('projectName').textContent = projectName;
+            document.getElementById('originalTimestamp').textContent = formatTimestamp(originalTimestamp);
+            document.getElementById('updatedTimestamp').textContent = formatTimestamp(comparisonTimestamp);
+            document.getElementById('timeDifference').textContent = calculateTimeDifference(originalTimestamp, comparisonTimestamp);
+
+            // 데이터 로드
+            loadOriginalData(projectName, originalTimestamp);
+            loadUpdatedData(projectName, comparisonTimestamp, caDirectory);
+        }
+
+        // 원본 데이터 로드
+        function loadOriginalData(projectName, timestamp) {
+            fetch(`/api/perturbation/result/${projectName}/${timestamp}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayOriginalData(data.data);
+                        // 업데이트된 데이터가 로드된 후에만 비교 수행
+                        if (window.updatedData) {
+                            performComparison();
+                        } else {
+                            console.log('Waiting for updated data to load...');
+                        }
+                    } else {
+                        console.error('Failed to load original data:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading original data:', error);
+                });
+        }
+
+        // 업데이트된 데이터 로드 (비교 데이터)
+        function loadUpdatedData(projectName, timestamp, caDirectory) {
+            const fetchUrl = `/api/perturbation/result/${projectName}/${timestamp}?ca=${caDirectory}`;
+            console.log('Fetching updated data from:', fetchUrl);
+            console.log('Parameters:', { projectName, timestamp, caDirectory });
+            
+            fetch(fetchUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayUpdatedData(data.data);
+                        // 원본 데이터가 로드된 후에만 비교 수행
+                        if (window.originalData) {
+                            performComparison();
+                        } else {
+                            console.log('Waiting for original data to load...');
+                        }
+                    } else {
+                        console.error('Failed to load updated data:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading updated data:', error);
+                });
+        }
+
+        // 원본 데이터 표시
+        function displayOriginalData(data) {
+            console.log('Displaying original data:', data);
+            
+            // 추론 결과 이미지 표시 (기존 perturbed inference)
+            document.getElementById('originalInference').src = `/static/${data.perturbed_inference_image}`;
+            
+            // 통계 표시 (기존 perturbed detections)
+            const detectionCount = data.perturbed_detections ? data.perturbed_detections.length : 0;
+            document.getElementById('originalObjectCount').textContent = detectionCount;
+            
+            // 전역 변수에 저장
+            window.originalData = data;
+        }
+
+        // 업데이트된 데이터 표시
+        function displayUpdatedData(data) {
+            console.log('Displaying updated data:', data);
+            
+            // 추론 결과 이미지 표시 (re-edit된 추론 결과)
+            document.getElementById('updatedInference').src = `/static/${data.re_edit_perturbed_inference_image}`;
+            
+            // 통계 표시 (re-edit된 검출 결과)
+            const detectionCount = data.re_edit_perturbed_detections ? data.re_edit_perturbed_detections.length : 0;
+            document.getElementById('updatedObjectCount').textContent = detectionCount;
+            
+            // 전역 변수에 저장
+            window.updatedData = data;
+        }
+
+        // 비교 수행
+        function performComparison() {
+            console.log('Performing comparison...');
+            console.log('Original data available:', !!window.originalData);
+            console.log('Updated data available:', !!window.updatedData);
+            console.log('Original data:', window.originalData);
+            console.log('Updated data:', window.updatedData);
+            
+            if (!window.originalData || !window.updatedData) {
+                console.error('Missing data for comparison');
+                console.error('Original data:', window.originalData);
+                console.error('Updated data:', window.updatedData);
+                return;
+            }
+
+            // 객체 수 변화
+            const originalCount = window.originalData.perturbed_detections ? window.originalData.perturbed_detections.length : 0;
+            const updatedCount = window.updatedData.re_edit_perturbed_detections ? window.updatedData.re_edit_perturbed_detections.length : 0;
+            const countChange = updatedCount - originalCount;
+            
+            console.log('Object count comparison:', {
+                originalCount,
+                updatedCount,
+                countChange,
+                originalDetections: window.originalData.perturbed_detections,
+                updatedDetections: window.updatedData.re_edit_perturbed_detections
+            });
+            
+            document.getElementById('objectCountChange').textContent = 
+                `${countChange > 0 ? '+' : ''}${countChange}`;
+            document.getElementById('objectCountChange').className = 
+                `stat-value ${countChange > 0 ? 'text-success' : countChange < 0 ? 'text-danger' : 'text-muted'}`;
+
+            // 검출률 변화
+            const originalRate = originalCount > 0 ? 100 : 0;
+            const updatedRate = updatedCount > 0 ? 100 : 0;
+            const rateChange = updatedRate - originalRate;
+            
+            document.getElementById('detectionRateChange').textContent = 
+                `${rateChange > 0 ? '+' : ''}${rateChange}%`;
+            document.getElementById('detectionRateChange').className = 
+                `stat-value ${rateChange > 0 ? 'text-success' : rateChange < 0 ? 'text-danger' : 'text-muted'}`;
+
+            // 교란 설정 비교
+            comparePerturbationSettings();
+            
+            // 검출 결과 비교
+            compareDetectionResults();
+        }
+
+        // 교란 설정 비교
+        function comparePerturbationSettings() {
+            console.log('Comparing perturbation settings...');
+            console.log('Original data:', window.originalData);
+            console.log('Updated data:', window.updatedData);
+            
+            const originalSettings = window.originalData.perturbation_settings;
+            const updatedSettings = window.updatedData.perturbation_settings;
+            
+            console.log('Original settings:', originalSettings);
+            console.log('Updated settings:', updatedSettings);
+            
+            const comparisonList = document.getElementById('perturbationComparisonList');
+            comparisonList.innerHTML = '';
+
+            // 마스킹 타입 비교
+            console.log('Comparing masking types:', {
+                original: originalSettings.masking_type,
+                updated: updatedSettings.masking_type,
+                different: originalSettings.masking_type !== updatedSettings.masking_type
+            });
+            
+            if (originalSettings.masking_type !== updatedSettings.masking_type) {
+                console.log('Adding masking type comparison item');
+                addPerturbationComparisonItem(
+                    'Masking Type',
+                    originalSettings.masking_type,
+                    updatedSettings.masking_type
+                );
+            }
+
+            // 추가 교란 옵션 비교
+            const originalExtra = originalSettings.extra_perturbations || {};
+            const updatedExtra = updatedSettings.extra_perturbations || {};
+            
+            console.log('Comparing extra perturbations:', {
+                original: originalExtra,
+                updated: updatedExtra
+            });
+
+            Object.keys(updatedExtra).forEach(key => {
+                console.log(`Comparing ${key}:`, {
+                    original: originalExtra[key],
+                    updated: updatedExtra[key],
+                    different: originalExtra[key] !== updatedExtra[key]
+                });
+                
+                if (originalExtra[key] !== updatedExtra[key]) {
+                    console.log(`Adding ${key} comparison item`);
+                    addPerturbationComparisonItem(
+                        key.charAt(0).toUpperCase() + key.slice(1),
+                        originalExtra[key] || 'None',
+                        updatedExtra[key]
+                    );
+                }
+            });
+        }
+
+        // 교란 설정 비교 항목 추가
+        function addPerturbationComparisonItem(label, originalValue, updatedValue) {
+            const comparisonList = document.getElementById('perturbationComparisonList');
+            
+            const item = document.createElement('div');
+            item.className = 'perturbation-item';
+            item.innerHTML = `
+                <div class="perturbation-label">${label}</div>
+                <div class="perturbation-values">
+                    <span class="value-original">${originalValue}</span>
+                    <i class="bi bi-arrow-right text-muted"></i>
+                    <span class="value-updated">${updatedValue}</span>
+                </div>
+            `;
+            
+            comparisonList.appendChild(item);
+        }
+
+        // 검출 결과 비교
+        function compareDetectionResults() {
+            const originalDetections = window.originalData.perturbed_detections;
+            const updatedDetections = window.updatedData.re_edit_perturbed_detections;
+            
+            console.log('Comparing detection results:', {
+                originalDetections,
+                updatedDetections
+            });
+            
+            const comparisonList = document.getElementById('detectionComparisonList');
+            comparisonList.innerHTML = '';
+
+            // 간단한 매칭 로직 (클래스별로 비교)
+            const originalByClass = groupDetectionsByClass(originalDetections);
+            const updatedByClass = groupDetectionsByClass(updatedDetections);
+
+            // 모든 클래스에 대해 비교
+            const allClasses = new Set([...Object.keys(originalByClass), ...Object.keys(updatedByClass)]);
+            
+            allClasses.forEach(className => {
+                const originalCount = originalByClass[className]?.length || 0;
+                const updatedCount = updatedByClass[className]?.length || 0;
+                
+                if (originalCount !== updatedCount) {
+                    addDetectionComparisonItem(className, originalCount, updatedCount);
+                }
+            });
+        }
+
+        // 클래스별 검출 결과 그룹화
+        function groupDetectionsByClass(detections) {
+            return detections.reduce((groups, detection) => {
+                const className = detection.class_name;
+                if (!groups[className]) {
+                    groups[className] = [];
+                }
+                groups[className].push(detection);
+                return groups;
+            }, {});
+        }
+
+        // 검출 결과 비교 항목 추가
+        function addDetectionComparisonItem(className, originalCount, updatedCount) {
+            const comparisonList = document.getElementById('detectionComparisonList');
+            
+            const item = document.createElement('div');
+            item.className = 'detection-item';
+            
+            const countChange = updatedCount - originalCount;
+            const changeClass = countChange > 0 ? 'change-positive' : countChange < 0 ? 'change-negative' : 'change-neutral';
+            
+            item.innerHTML = `
+                <div class="detection-header">
+                    <div class="detection-class">${className}</div>
+                    <div class="detection-confidence">
+                        <span class="confidence-value confidence-original">${originalCount}</span>
+                        <i class="bi bi-arrow-right text-muted"></i>
+                        <span class="confidence-value confidence-updated">${updatedCount}</span>
+                        <span class="change-indicator ${changeClass}">
+                            ${countChange > 0 ? '+' : ''}${countChange}
+                        </span>
+                    </div>
+                </div>
+            `;
+            
+            comparisonList.appendChild(item);
+        }
+
+        // 타임스탬프 포맷팅
+        function formatTimestamp(timestamp) {
+            // timestamp 형식: "20250904_161100" -> "2025-09-04 16:11:00"
+            if (!timestamp) return 'Invalid Date';
+            
+            const year = timestamp.substring(0, 4);
+            const month = timestamp.substring(4, 6);
+            const day = timestamp.substring(6, 8);
+            const hour = timestamp.substring(9, 11);
+            const minute = timestamp.substring(11, 13);
+            const second = timestamp.substring(13, 15);
+            
+            const dateString = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+            const date = new Date(dateString);
+            
+            if (isNaN(date.getTime())) {
+                return 'Invalid Date';
+            }
+            
+            return date.toLocaleString();
+        }
+
+        // 시간 차이 계산
+        function calculateTimeDifference(original, updated) {
+            if (!original || !updated) return 'Invalid Time';
+            
+            // timestamp 형식을 Date 객체로 변환
+            const originalDate = parseTimestamp(original);
+            const updatedDate = parseTimestamp(updated);
+            
+            if (!originalDate || !updatedDate) return 'Invalid Time';
+            
+            const diffMs = updatedDate - originalDate;
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            
+            if (diffMinutes < 60) {
+                return `${diffMinutes}m`;
+            } else {
+                const diffHours = Math.floor(diffMinutes / 60);
+                return `${diffHours}h ${diffMinutes % 60}m`;
+            }
+        }
+        
+        // 타임스탬프 파싱 헬퍼 함수
+        function parseTimestamp(timestamp) {
+            if (!timestamp) return null;
+            
+            const year = timestamp.substring(0, 4);
+            const month = timestamp.substring(4, 6);
+            const day = timestamp.substring(6, 8);
+            const hour = timestamp.substring(9, 11);
+            const minute = timestamp.substring(11, 13);
+            const second = timestamp.substring(13, 15);
+            
+            const dateString = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+            const date = new Date(dateString);
+            
+            return isNaN(date.getTime()) ? null : date;
+        }
+
+        // 뒤로 가기
+        function goBack() {
+            window.history.back();
+        }
+    </script>
+</body>
+</html>
