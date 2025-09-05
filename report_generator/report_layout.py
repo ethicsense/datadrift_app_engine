@@ -316,8 +316,8 @@ def generate_individual_xai_html(filename, xai_result, visualizer):
     # 개별 보고서용 XAI 요약 정보 생성
     summary_info = generate_xai_summary_for_individual_report(xai_result)
     
-    # 공통 XAI 시각화 컨테이너 사용
-    viz_container = generate_xai_visualizations_container(visualizations, f"🔬 XAI Analysis Results - {filename}")
+    # 공통 XAI 시각화 컨테이너 사용 (개별 보고서에서는 차트 설명 제외)
+    viz_container = generate_xai_visualizations_container(visualizations, f"🔬 XAI Analysis Results - {filename}", include_descriptions=False)
     
     # 완전한 HTML 생성
     html_content = f"""<!DOCTYPE html>
@@ -851,7 +851,7 @@ def generate_clustering_summary_section(clustering_summary, clustering_charts=No
     return summary_html + charts_html
 
 
-def generate_xai_visualizations_container(xai_charts, title="🔬 Representative Sample Report"):
+def generate_xai_visualizations_container(xai_charts, title="🔬 Representative Sample Report", include_descriptions=True):
     """XAI 시각화 컨테이너 HTML 생성 (공통 함수)"""
     if not xai_charts:
         return ""
@@ -929,9 +929,9 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
             viz_data = viz_types[viz_type]
             title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
             
-            # 차트 설명 추가
+            # 차트 설명 추가 (include_descriptions 매개변수에 따라)
             chart_description = ""
-            if chart_description_generator:
+            if include_descriptions and chart_description_generator:
                 # XAI 차트 키 매핑
                 xai_chart_keys = {
                     'cam_heatmap': 'cam_distribution',
@@ -964,9 +964,9 @@ def generate_xai_visualizations_container(xai_charts, title="🔬 Representative
         if viz_type not in desired_order:
             title = viz_titles.get(viz_type, viz_type.replace('_', ' ').title())
             
-            # 차트 설명 추가
+            # 차트 설명 추가 (include_descriptions 매개변수에 따라)
             chart_description = ""
-            if chart_description_generator:
+            if include_descriptions and chart_description_generator:
                 # XAI 차트 키 매핑
                 xai_chart_keys = {
                     'cam_heatmap': 'cam_distribution',
@@ -1037,17 +1037,185 @@ def generate_xai_summary_for_integrated_report(xai_summary):
 
 
 def generate_xai_summary_for_individual_report(xai_result):
-    """개별 보고서용 XAI 요약 정보 HTML 생성 (일단 비워둠)"""
-    # TODO: 개별 데이터에 특화된 요약 정보 구현
-    return """
+    """개별 보고서용 XAI 요약 정보 HTML 생성"""
+    if not xai_result or not isinstance(xai_result, dict):
+        return """
+        <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; border: 1px solid #dee2e6;">
+            <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">📊 Summary Status</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                    <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Analysis Status</h5>
+                    <div style="font-size: 1.8em; font-weight: bold; color: #dc3545;">No Data</div>
+                    <small style="color: #6c757d;">No XAI analysis data available</small>
+                </div>
+            </div>
+        </div>
+        """
+    
+    # XAI 분석 결과에서 주요 정보 추출
+    summary_cards = []
+    
+    # 1. 분석 상태 카드
+    analysis_status = "Completed"
+    status_color = "#28a745"
+    if 'error' in xai_result:
+        analysis_status = "Error"
+        status_color = "#dc3545"
+    elif not xai_result.get('cam_stats'):
+        analysis_status = "Incomplete"
+        status_color = "#ffc107"
+    
+    summary_cards.append(f"""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+            <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Analysis Status</h5>
+            <div style="font-size: 1.8em; font-weight: bold; color: {status_color};">{analysis_status}</div>
+            <small style="color: #6c757d;">Individual Report</small>
+        </div>
+    """)
+    
+    # 2. CAM 통계 카드
+    if 'cam_stats' in xai_result and xai_result['cam_stats']:
+        cam_stats = xai_result['cam_stats']
+        
+        # CAM 통계에서 값 추출 (튜플/리스트 구조 처리)
+        def extract_cam_stat_value(stat_name, default_value=0.0):
+            """CAM 통계에서 값을 안전하게 추출하는 헬퍼 함수"""
+            stat_data = cam_stats.get(stat_name, default_value)
+            if isinstance(stat_data, (list, tuple)) and len(stat_data) >= 2:
+                return stat_data[1]  # 값 부분 (튜플의 두 번째 요소)
+            elif isinstance(stat_data, (int, float)):
+                return stat_data
+            else:
+                return default_value
+        
+        # CAM 통계 값 추출
+        mean_val = extract_cam_stat_value('mean', 0.0)
+        max_val = extract_cam_stat_value('max', 0.0)
+        
+        # 디버깅: CAM 통계 데이터 확인
+        print(f"    🔍 CAM Stats Debug - Raw data: {cam_stats}")
+        print(f"    📊 Mean raw: {cam_stats.get('mean')}, extracted: {mean_val}")
+        print(f"    📊 Max raw: {cam_stats.get('max')}, extracted: {max_val}")
+        
+        # 안전한 숫자 변환
+        try:
+            mean_val = float(mean_val) if mean_val is not None else 0.0
+            max_val = float(max_val) if max_val is not None else 0.0
+        except (ValueError, TypeError):
+            mean_val = 0.0
+            max_val = 0.0
+        
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">CAM Activation</h5>
+                <div style="font-size: 1.4em; font-weight: bold; color: #495057;">{mean_val:.3f}</div>
+                <small style="color: #6c757d;">Mean: {mean_val:.3f} | Max: {max_val:.3f}</small>
+            </div>
+        """)
+    
+    # 3. 객체 감지 결과 카드
+    if 'overlap_results' in xai_result and xai_result['overlap_results']:
+        overlap = xai_result['overlap_results']
+        iou = overlap.get('iou', 0)
+        class_name = overlap.get('largest_class_name', 'Unknown')
+        
+        # 안전한 숫자 변환
+        try:
+            iou_val = float(iou) if iou is not None else 0.0
+        except (ValueError, TypeError):
+            iou_val = 0.0
+        
+        # IoU에 따른 색상 결정
+        if iou_val > 0.5:
+            iou_color = "#28a745"  # 녹색
+        elif iou_val > 0.3:
+            iou_color = "#ffc107"  # 노란색
+        else:
+            iou_color = "#dc3545"  # 빨간색
+        
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Object Detection</h5>
+                <div style="font-size: 1.4em; font-weight: bold; color: {iou_color};">{iou_val:.3f}</div>
+                <small style="color: #6c757d;">IoU: {iou_val:.3f} | Class: {class_name}</small>
+            </div>
+        """)
+    
+    # 4. 엔트로피 카드
+    if 'entropy_results' in xai_result and xai_result['entropy_results']:
+        entropy = xai_result['entropy_results']
+        shannon_entropy = entropy.get('shannon', 0)
+        
+        # 안전한 숫자 변환
+        try:
+            entropy_val = float(shannon_entropy) if shannon_entropy is not None else 0.0
+        except (ValueError, TypeError):
+            entropy_val = 0.0
+        
+        # 엔트로피에 따른 색상 결정
+        if entropy_val > 2.0:
+            entropy_color = "#dc3545"  # 빨간색 (높은 복잡성)
+        elif entropy_val > 1.0:
+            entropy_color = "#ffc107"  # 노란색 (중간 복잡성)
+        else:
+            entropy_color = "#28a745"  # 녹색 (낮은 복잡성)
+        
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Complexity</h5>
+                <div style="font-size: 1.4em; font-weight: bold; color: {entropy_color};">{entropy_val:.3f}</div>
+                <small style="color: #6c757d;">Shannon Entropy</small>
+            </div>
+        """)
+    
+    # 5. 연결된 구성 요소 카드
+    if 'components_analysis' in xai_result and xai_result['components_analysis']:
+        components = xai_result['components_analysis']
+        num_components = components.get('num_components', 0)
+        active_ratio = components.get('active_ratio', 0)
+        
+        # 안전한 숫자 변환
+        try:
+            components_val = int(num_components) if num_components is not None else 0
+            ratio_val = float(active_ratio) if active_ratio is not None else 0.0
+        except (ValueError, TypeError):
+            components_val = 0
+            ratio_val = 0.0
+        
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Components</h5>
+                <div style="font-size: 1.4em; font-weight: bold; color: #495057;">{components_val}</div>
+                <small style="color: #6c757d;">Active: {ratio_val:.1f}%</small>
+            </div>
+        """)
+    
+    # 6. 모델 정보 카드
+    if 'model_name' in xai_result:
+        model_name = xai_result['model_name']
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Model</h5>
+                <div style="font-size: 1.2em; font-weight: bold; color: #495057;">{model_name}</div>
+                <small style="color: #6c757d;">Detection Model</small>
+            </div>
+        """)
+    
+    # 카드가 없는 경우 기본 상태 표시
+    if not summary_cards:
+        summary_cards.append(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Analysis Status</h5>
+                <div style="font-size: 1.8em; font-weight: bold; color: #ffc107;">Partial</div>
+                <small style="color: #6c757d;">Limited analysis data</small>
+            </div>
+        """)
+    
+    return f"""
     <div style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; border: 1px solid #dee2e6;">
         <h4 style="color: #495057; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">📊 Individual Analysis Summary</h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                <h5 style="color: #6c757d; margin: 0 0 8px 0; font-size: 0.9em;">Analysis Status</h5>
-                <div style="font-size: 1.8em; font-weight: bold; color: #495057;">Ready</div>
-                <small style="color: #6c757d;">Individual Report</small>
-            </div>
+            {''.join(summary_cards)}
         </div>
     </div>
     """
