@@ -790,7 +790,15 @@
                         
                         // 마스크 데이터 저장
                         window.maskData = maskPath;
+                        console.log('=== MASK DATA SAVED ===');
                         console.log('Mask area created with', maskPath.length, 'points');
+                        console.log('Mask data sample:', maskPath.slice(0, 3));
+                        console.log('Mask data range:');
+                        const xCoords = maskPath.map(p => p.x);
+                        const yCoords = maskPath.map(p => p.y);
+                        console.log('  X: min=', Math.min(...xCoords), 'max=', Math.max(...xCoords));
+                        console.log('  Y: min=', Math.min(...yCoords), 'max=', Math.max(...yCoords));
+                        console.log('=== END MASK DATA SAVED ===');
                     }
                 } else {
                     // 너무 짧은 경로는 무시하고 원본 이미지 다시 그리기
@@ -941,49 +949,7 @@
             window.extraPerturbationsEnabled = false;
         });
 
-        // 캔버스 좌표를 실제 이미지 좌표로 변환하는 함수 (단순화된 버전)
-        function transformCanvasToImageCoords(canvasCoords) {
-            if (!window.imageTransform) {
-                console.error('Image transform information not available');
-                return canvasCoords;
-            }
-            
-            const transform = window.imageTransform;
-            const transformedCoords = [];
-            
-            console.log('=== SIMPLIFIED COORDINATE TRANSFORMATION ===');
-            console.log('Transform info:', transform);
-            console.log('Canvas coords sample:', canvasCoords.slice(0, 3));
-            
-            for (let i = 0; i < canvasCoords.length; i++) {
-                const coord = canvasCoords[i];
-                
-                // 캔버스 좌표에서 오프셋 제거
-                let x = coord.x - transform.offsetX;
-                let y = coord.y - transform.offsetY;
-                
-                // 그려진 크기에서 원본 크기로 스케일 변환
-                x = (x / transform.drawWidth) * transform.originalWidth;
-                y = (y / transform.drawHeight) * transform.originalHeight;
-                
-                // 좌표 범위 제한
-                x = Math.max(0, Math.min(x, transform.originalWidth - 1));
-                y = Math.max(0, Math.min(y, transform.originalHeight - 1));
-                
-                const finalX = Math.round(x);
-                const finalY = Math.round(y);
-                
-                transformedCoords.push({ x: finalX, y: finalY });
-                
-                if (i < 3) {
-                    console.log(`Point ${i}: (${coord.x}, ${coord.y}) -> (${finalX}, ${finalY})`);
-                }
-            }
-            
-            console.log('Final transformed coords sample:', transformedCoords.slice(0, 3));
-            console.log('=== END TRANSFORMATION ===');
-            return transformedCoords;
-        }
+
 
         // 마스크 적용
         function applyMask() {
@@ -997,17 +963,29 @@
                 return;
             }
             
-            // 캔버스 좌표를 실제 이미지 좌표로 변환
-            const transformedMaskData = transformCanvasToImageCoords(window.maskData);
-            
-            // 변환된 마스크 데이터 저장
-            window.transformedMaskData = transformedMaskData;
+            // 실제 마스킹 좌표 정보 저장 (복원용)
+            if (window.imageTransform && window.maskData) {
+                const maskInfo = {
+                    originalCanvasPoints: window.maskData,  // 1000x800 캔버스 기준 좌표
+                    imageTransform: window.imageTransform,  // 이미지 변환 정보
+                    maskingType: window.selectedMaskingType,
+                    timestamp: Date.now()
+                };
+                
+                // 로컬 스토리지에 저장
+                localStorage.setItem('maskInfo', JSON.stringify(maskInfo));
+                
+                console.log('=== MASK INFO SAVED ===');
+                console.log('Original canvas points:', window.maskData.length, 'points');
+                console.log('Image transform:', window.imageTransform);
+                console.log('Masking type:', window.selectedMaskingType);
+                console.log('=== END MASK INFO SAVED ===');
+            }
             
             // 마스크 데이터와 선택된 마스킹 타입을 서버로 전송할 준비
             console.log('Original canvas mask data:', window.maskData);
-            console.log('Transformed image mask data:', transformedMaskData);
             console.log('Masking type:', window.selectedMaskingType);
-            console.log('Mask area points:', transformedMaskData.length);
+            console.log('Mask area points:', window.maskData.length);
             alert('Mask applied successfully!');
         }
 
@@ -1114,6 +1092,13 @@
                 return;
             }
 
+            console.log('=== RUN PERTURBATION DEBUG ===');
+            console.log('Mask data exists:', !!window.maskData);
+            console.log('Mask data length:', window.maskData ? window.maskData.length : 'undefined');
+            console.log('Selected masking type:', window.selectedMaskingType);
+            console.log('Mask data sample:', window.maskData ? window.maskData.slice(0, 3) : 'undefined');
+            console.log('=== END DEBUG ===');
+            
             if (!window.maskData || window.maskData.length === 0) {
                 alert('Please draw a mask on the image');
                 return;
@@ -1124,12 +1109,7 @@
                 return;
             }
 
-            // 마스크 데이터가 변환되지 않았다면 변환 수행
-            if (!window.transformedMaskData) {
-                console.log('Transforming mask coordinates...');
-                const transformedMaskData = transformCanvasToImageCoords(window.maskData);
-                window.transformedMaskData = transformedMaskData;
-            }
+
 
             // 프로젝트 이름 중복 확인
             checkProjectExists(projectName).then(exists => {
@@ -1156,15 +1136,27 @@
             // Task 정보 추가
             formData.append('task', document.querySelector('input[name="task"]:checked').value);
             
-            // 변환된 마스크 데이터 추가 (실제 이미지 좌표)
-            const maskDataToSend = window.transformedMaskData || window.maskData;
-            console.log('Sending mask data to server:', maskDataToSend);
-            console.log('Mask data length:', maskDataToSend.length);
-            console.log('First few points:', maskDataToSend.slice(0, 3));
-            formData.append('mask_data', JSON.stringify(maskDataToSend));
+            // 마스크 데이터 추가
+            console.log('Sending mask data to server:', window.maskData);
+            console.log('Mask data length:', window.maskData.length);
+            console.log('First few points:', window.maskData.slice(0, 3));
+            formData.append('mask_data', JSON.stringify(window.maskData));
+            
+            // 원본 캔버스 좌표 추가 (복원용)
+            if (window.maskData && window.maskData.length > 0) {
+                formData.append('original_canvas_points', JSON.stringify(window.maskData));
+                console.log('Original canvas points sent to server');
+            }
             
             // 마스킹 타입 추가
             formData.append('masking_type', window.selectedMaskingType);
+            
+            // 캔버스 크기 정보 추가
+            const canvas = document.getElementById('imageCanvas');
+            if (canvas) {
+                formData.append('canvas_width', canvas.width);
+                formData.append('canvas_height', canvas.height);
+            }
             
             // 추가 교란 옵션 값들 추가 (활성화된 경우에만)
             if (window.extraPerturbationsEnabled) {
@@ -1427,6 +1419,73 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadExistingProjects();
         });
+
+        // 모델 로드 상태 업데이트 함수
+        function updateModelLoadStatus(isLoaded, modelName) {
+            const modelStatusElement = document.getElementById('modelStatus');
+            if (modelStatusElement) {
+                if (isLoaded) {
+                    modelStatusElement.textContent = `✅ Model loaded: ${modelName}`;
+                    modelStatusElement.className = 'text-success';
+                } else {
+                    modelStatusElement.textContent = '❌ No model loaded';
+                    modelStatusElement.className = 'text-danger';
+                }
+            }
+            
+            // 모델 로드 버튼 상태 업데이트
+            const loadButton = document.querySelector('button[onclick="loadModel()"]');
+            if (loadButton) {
+                loadButton.disabled = isLoaded;
+                loadButton.textContent = isLoaded ? 'Model Loaded' : 'Load Model';
+            }
+        }
+
+        // 추가 교란 옵션 토글 함수
+        function toggleExtraPerturbations(enabled) {
+            const perturbationControls = document.getElementById('perturbationControls');
+            if (perturbationControls) {
+                perturbationControls.style.display = enabled ? 'block' : 'none';
+            }
+            
+            // perturbation 옵션 섹션도 표시
+            const perturbationOptionsSection = document.getElementById('perturbationOptionsSection');
+            if (perturbationOptionsSection) {
+                perturbationOptionsSection.style.display = 'block';
+            }
+            
+            // 마스킹 옵션 섹션도 표시 (재편집 모드에서는 항상 표시)
+            const maskingOptionsSection = document.getElementById('maskingOptionsSection');
+            if (maskingOptionsSection) {
+                maskingOptionsSection.style.display = 'block';
+            }
+        }
+
+        // 밝기 값 업데이트 함수
+        function updateBrightnessValue(value) {
+            const brightnessValueDisplay = document.getElementById('brightnessValue');
+            if (brightnessValueDisplay) {
+                brightnessValueDisplay.textContent = value;
+            }
+        }
+
+        // 회전 값 업데이트 함수
+        function updateRotationValue(value) {
+            const rotationValueDisplay = document.getElementById('rotationValue');
+            if (rotationValueDisplay) {
+                rotationValueDisplay.textContent = value;
+            }
+        }
+
+        // 스케일 값 업데이트 함수
+        function updateScaleValue(value) {
+            const scaleValueDisplay = document.getElementById('scaleValue');
+            if (scaleValueDisplay) {
+                scaleValueDisplay.textContent = value;
+            }
+        }
+
+
 
         // 뒤로가기 함수
         function goBack() {
