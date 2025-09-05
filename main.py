@@ -942,7 +942,8 @@ Examples:
             if args.directory:
                 cache_manager = get_cache_manager(args.directory)
             else:
-                cache_manager = get_cache_manager()
+                # 디렉토리가 지정되지 않은 경우 현재 작업 디렉토리 사용
+                cache_manager = get_cache_manager(os.getcwd())
             
             cache_info = cache_manager.get_cache_info()
             print("=" * 60)
@@ -977,7 +978,8 @@ Examples:
             if args.directory:
                 cache_manager = get_cache_manager(args.directory)
             else:
-                cache_manager = get_cache_manager()
+                # 디렉토리가 지정되지 않은 경우 현재 작업 디렉토리 사용
+                cache_manager = get_cache_manager(os.getcwd())
             
             print("🗑️  Clearing cache files...")
             if cache_manager.clear_all_cache():

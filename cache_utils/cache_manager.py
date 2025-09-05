@@ -17,16 +17,13 @@ dataset_folder/
 '''
 
 class CacheManager:
-    def __init__(self, dataset_directory=None):
-        """캐시 매니저 초기화"""
-        if dataset_directory is None:
-            # 기본 캐시 디렉토리 (전역 캐시용)
-            cache_dir = os.getenv('DATADRIFT_CACHE_DIR', 'cache')
-            self.cache_dir = Path(cache_dir)
-        else:
-            # 데이터셋별 캐시 디렉토리
-            self.cache_dir = Path(dataset_directory) / 'cache'
+    def __init__(self, dataset_directory):
+        """캐시 매니저 초기화 (데이터셋별 캐시만 지원)"""
+        if not dataset_directory:
+            raise ValueError("dataset_directory는 필수입니다. 전역 캐시는 지원하지 않습니다.")
         
+        # 데이터셋별 캐시 디렉토리
+        self.cache_dir = Path(dataset_directory) / 'cache'
         self.cache_dir.mkdir(exist_ok=True, parents=True)
         
         # 캐시 설정
@@ -246,17 +243,13 @@ class CacheManager:
             'cache_details': cache_details
         }
 
-# 전역 캐시 매니저 인스턴스 (기본 캐시용)
-global_cache_manager = CacheManager()
+def get_cache_manager(dataset_directory):
+    """데이터셋별 캐시 매니저 반환 (dataset_directory 필수)"""
+    if not dataset_directory:
+        raise ValueError("dataset_directory는 필수입니다. 전역 캐시는 지원하지 않습니다.")
+    return CacheManager(dataset_directory)
 
-def get_cache_manager(dataset_directory=None):
-    """데이터셋별 캐시 매니저 반환"""
-    if dataset_directory:
-        return CacheManager(dataset_directory)
-    else:
-        return global_cache_manager
-
-def get_cached_html_content(identifier, generator_func, *args, dataset_directory=None):
+def get_cached_html_content(identifier, generator_func, *args, dataset_directory):
     """HTML 컨텐츠를 캐시에서 가져오거나 생성"""
     cache_manager = get_cache_manager(dataset_directory)
     
