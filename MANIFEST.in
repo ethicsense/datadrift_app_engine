@@ -1,0 +1,24 @@
+# Include essential files
+include README_PYPI.md
+include *.py
+recursive-include clip *
+
+# Include flask_webapp specific files only
+include flask_webapp/__init__.py
+include flask_webapp/app.py
+include flask_webapp/config.py
+include flask_webapp/trainer.py
+include flask_webapp/utils.py
+include flask_webapp/run.sh
+recursive-include flask_webapp/templates *
+recursive-include flask_webapp/static/css *
+recursive-include flask_webapp/static/images *
+include flask_webapp/models/yolo11n.pt
+include flask_webapp/models/yolov8n.pt
+
+# Global excludes
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude .git* 
