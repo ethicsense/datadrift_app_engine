@@ -2,8 +2,7 @@
 **/fonts/
 
 # ignore pypi requirements
-MANIFEST.in
-setup.py
+setup.py.backup
 README_PYPI.md
 
 # ignore DB, temporal data & log files
@@ -17,6 +16,7 @@ flask_webapp/static/perturbation_results/
 deep_text_recognition_benchmark
 yolo_cam/
 **/point-e/
+clip/
 
 # ignore macOS files
 .DS_Store
