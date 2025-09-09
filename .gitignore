@@ -4,6 +4,8 @@
 # ignore pypi requirements
 setup.py.backup
 README_PYPI.md
+MANIFEST.in
+pyproject.toml
 
 # ignore DB, temporal data & log files
 flask_webapp/db/
