@@ -3,6 +3,11 @@ from datetime import datetime
 import os
 
 # 캐시 매니저 import (분석 데이터용)
+import sys
+import os
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from cache_utils.cache_manager import get_cache_manager, get_cached_html_content, get_cached_analysis_data, save_analysis_data
 
 # 차트 설명 생성기 import

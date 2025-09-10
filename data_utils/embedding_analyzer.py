@@ -647,6 +647,12 @@ def run_clustering_analysis(directories, formats, n_clusters=None, method='kmean
             continue
         
         # 캐시에서 임베딩 데이터 로드
+        # 상대 경로로 import (data_utils에서 cache_utils로 접근)
+        import sys
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
         from cache_utils.cache_manager import get_cached_analysis_data
         embedding_cache = get_cached_analysis_data(directory, "image_drift_content")
         
