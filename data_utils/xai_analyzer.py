@@ -217,6 +217,54 @@ class XAIAnalyzer:
         
         return info
     
+    def list_model_layers(self) -> List[Dict]:
+        """
+        모델의 모든 레이어 정보를 반환합니다.
+        
+        Returns:
+            List[Dict]: 레이어 정보 리스트
+        """
+        if self.model is None:
+            print("Model not loaded. Please load model first.")
+            return []
+        
+        model_layers = self.model.model.model
+        layers_info = []
+        
+        for idx, layer in enumerate(model_layers):
+            layer_info = {
+                'index': idx,
+                'type': type(layer).__name__,
+                'str': str(layer),
+                'is_target': idx == self.target_layer_index if self.target_layer_index is not None else False
+            }
+            layers_info.append(layer_info)
+        
+        return layers_info
+    
+    def print_model_layers(self):
+        """
+        모델의 모든 레이어 정보를 출력합니다.
+        """
+        layers_info = self.list_model_layers()
+        if not layers_info:
+            return
+        
+        print("\n" + "=" * 80)
+        print("📋 MODEL LAYERS INFORMATION")
+        print("=" * 80)
+        print(f"{'Index':<6} {'Type':<20} {'Description':<50}")
+        print("-" * 80)
+        
+        for layer_info in layers_info:
+            marker = " 👈" if layer_info['is_target'] else ""
+            print(f"{layer_info['index']:<6} {layer_info['type']:<20} {layer_info['str'][:47]:<47}{marker}")
+        
+        print("=" * 80)
+        print("💡 Use --target-layer <index> to specify a different target layer")
+        print("💡 Recommended layers are usually Conv2d or BatchNorm2d layers")
+        print("=" * 80)
+    
     def find_target_layer(self, target_layer_index: Optional[int] = None) -> Optional[torch.nn.Module]:
         """
         YOLO 모델에서 CAM 분석에 적합한 타겟 레이어를 찾습니다.
@@ -318,7 +366,30 @@ class XAIAnalyzer:
             cam = YOLO_EigenCAM(self.model, target_layers, task='od')
             
             # CAM 생성
-            grayscale_cam = cam(rgb_img)[0, :, :]
+            cam_result_raw = cam(rgb_img)
+            print(f"    🔍 CAM raw result type: {type(cam_result_raw)}")
+            print(f"    🔍 CAM raw result shape: {getattr(cam_result_raw, 'shape', 'No shape attribute')}")
+            
+            # cam_result_raw 처리 - 다양한 형식 지원
+            if isinstance(cam_result_raw, tuple):
+                cam_result_processed = cam_result_raw[0]
+            elif isinstance(cam_result_raw, list):
+                cam_result_processed = cam_result_raw[0] if len(cam_result_raw) > 0 else cam_result_raw
+            else:
+                cam_result_processed = cam_result_raw
+                
+            # cam_result_processed가 여전히 list인 경우 첫 번째 요소 사용
+            if isinstance(cam_result_processed, list) and len(cam_result_processed) > 0:
+                cam_result_processed = cam_result_processed[0]
+                
+            print(f"    🔍 CAM processed result type: {type(cam_result_processed)}")
+            print(f"    🔍 CAM processed result shape: {getattr(cam_result_processed, 'shape', 'No shape attribute')}")
+            
+            # 최종 CAM 데이터 추출
+            if hasattr(cam_result_processed, 'shape') and len(cam_result_processed.shape) >= 2:
+                grayscale_cam = cam_result_processed[0, :, :] if len(cam_result_processed.shape) > 2 else cam_result_processed
+            else:
+                raise ValueError(f"Unexpected CAM result format: {type(cam_result_processed)}")
             
             # 디버깅: CAM 데이터 정보 출력
             print(f"    🔍 Generated CAM data: shape={grayscale_cam.shape}, dtype={grayscale_cam.dtype}")

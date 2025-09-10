@@ -370,7 +370,7 @@ def run_embedding_analysis(directories, formats, model=None, device=None, n_clus
     return processing_stats
 
 
-def run_xai_analysis(directories, formats, model_path=None, device=None):
+def run_xai_analysis(directories, formats, model_path=None, device=None, target_layer_index=None):
     """
     XAI 분석을 수행하고 캐시에 저장합니다.
     디렉토리 탐색하면서 파일을 바로 처리합니다.
@@ -380,6 +380,7 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
         formats: 분석할 이미지 포맷 리스트
         model_path: YOLO 모델 파일 경로
         device: 사용할 디바이스
+        target_layer_index: 타겟 레이어 인덱스 (None이면 자동 선택)
         
     Returns:
         dict: 각 디렉토리별 처리된 파일 수 정보
@@ -414,7 +415,7 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
         
         # XAI 분석기 초기화
         analyzer = XAIAnalyzer(device=device)
-        analyzer.load_model(model_path, target_layer_index=22)
+        analyzer.load_model(model_path, target_layer_index=target_layer_index)
         
         # 타겟 레이어 확인
         target_layers = analyzer.get_target_layers()
@@ -422,7 +423,11 @@ def run_xai_analysis(directories, formats, model_path=None, device=None):
             print("❌ Error: Could not find target layers for CAM analysis")
             continue
         else:
-            print(f"✅ Target layers ready: {len(target_layers)} layer(s)")
+            if target_layer_index is not None:
+                print(f"✅ Target layer ready: Layer {target_layer_index} (user specified)")
+            else:
+                print(f"✅ Target layer ready: Layer {analyzer.target_layer_index} (auto-detected)")
+            print(f"   Layer type: {type(target_layers[0]).__name__}")
         
         new_cache = {}
         total_files = 0
@@ -731,6 +736,12 @@ Examples:
   # Analysis with custom device and formats
   ddoc analysis /path/to/dataset --model-path /path/to/yolo_model.pt --device cuda --format jpg png
   
+  # Analysis with custom target layer
+  ddoc analysis /path/to/dataset --model-path /path/to/yolo_model.pt --target-layer 22
+  
+  # List all model layers to choose target layer
+  ddoc analysis --model-path /path/to/yolo_model.pt --list-layers
+  
   # Analysis with custom cluster selection method
   ddoc analysis /path/to/dataset --cluster-method silhouette
   ddoc analysis /path/to/dataset --cluster-method elbow
@@ -758,6 +769,8 @@ Examples:
     parser_analysis.add_argument('--format', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to include. (jpg | jpeg | png etc.)')
     parser_analysis.add_argument('--model-path', help='Path to YOLO model for XAI analysis (optional).')
     parser_analysis.add_argument('--device', default=None, help='Device to use for XAI analysis (cuda/cpu, default: auto).')
+    parser_analysis.add_argument('--target-layer', type=int, help='Target layer index for XAI analysis (0-based index). If not specified, auto-detection will be used.')
+    parser_analysis.add_argument('--list-layers', action='store_true', help='List all model layers and exit (requires --model-path).')
     parser_analysis.add_argument('--cluster-method', choices=['silhouette', 'elbow', 'manual'], default='elbow', help='Method for determining optimal number of clusters.')
 
     # Compare sub-command
@@ -797,6 +810,23 @@ Examples:
             else:
                 # Combine -r with directories
                 args.directories = [os.path.join(args.root, d) for d in args.directories]
+        
+        # 레이어 정보 출력 옵션 처리
+        if args.list_layers:
+            if not args.model_path:
+                print("❌ Error: --list-layers requires --model-path")
+                return
+            
+            if not os.path.exists(args.model_path):
+                print(f"❌ Error: Model file not found: {args.model_path}")
+                return
+            
+            print(f"Loading model: {args.model_path}")
+            from data_utils.xai_analyzer import XAIAnalyzer
+            analyzer = XAIAnalyzer(device=args.device)
+            analyzer.load_model(args.model_path, target_layer_index=args.target_layer)
+            analyzer.print_model_layers()
+            return
         
         # 분석 시작 시간 기록
         analysis_start_time = time.time()
@@ -838,7 +868,7 @@ Examples:
             
             xai_start = time.time()
             try:
-                xai_stats = run_xai_analysis(args.directories, args.format, args.model_path, args.device)
+                xai_stats = run_xai_analysis(args.directories, args.format, args.model_path, args.device, args.target_layer)
                 print("✅ XAI analysis completed successfully!")
                 analysis_times['xai_analysis'] = time.time() - xai_start
             except Exception as e:

@@ -14,6 +14,11 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 캐시 매니저 import
+import sys
+import os
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from cache_utils.cache_manager import get_cached_analysis_data
 
 # 차트 설명 생성기 import
@@ -537,6 +542,13 @@ class ImageAnalysisReport:
             return {}
         
         try:
+            # 상대 경로로 import (report_generator에서 data_utils로 접근)
+            import sys
+            import os
+            # 프로젝트 루트 디렉토리를 sys.path에 추가
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
             from data_utils.xai_visualizer import XAIVisualizer
             
             visualizer = XAIVisualizer()

@@ -18,6 +18,13 @@ def process_single_visualization_wrapper(filename_xai_tuple):
     """단일 XAI 결과를 처리하는 전역 함수 (병렬 처리용)"""
     filename, xai_result = filename_xai_tuple
     try:
+        # 병렬 처리에서 필요한 import들을 명시적으로 추가
+        import sys
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        
         # 각 프로세스에서 새로운 XAIVisualizer 인스턴스 생성
         visualizer = XAIVisualizer()
         # 개별 시각화 생성
@@ -633,6 +640,10 @@ Method Descriptions:"""
         # comprehensive_result를 인스턴스 변수로 저장하여 다른 함수에서 접근 가능하도록 함
         self._current_comprehensive_result = comprehensive_result
         
+        # 상대 경로로 import (data_utils 내에서) - 함수 시작 부분에서 import
+        import sys
+        import os
+        
         try:
             # 디버깅: comprehensive_result 키 확인
             # print(f"    🔍 Comprehensive result keys: {list(comprehensive_result.keys()) if comprehensive_result else 'None'}")
@@ -644,6 +655,9 @@ Method Descriptions:"""
             # 원본 CAM 파일에서 로드 시도 (한 번만 로드하고 저장)
             if cam_file_path and os.path.exists(cam_file_path):
                 try:
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    if project_root not in sys.path:
+                        sys.path.insert(0, project_root)
                     from data_utils.xai_analyzer import XAIAnalyzer
                     analyzer = XAIAnalyzer()
                     grayscale_cam = analyzer.load_cam_data_original(cam_file_path)
