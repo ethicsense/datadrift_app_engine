@@ -1868,6 +1868,39 @@ def load_existing_perturbation_project():
         'redirect_url': url_for('perturbation_result')
     })
 
+@app.route('/api/project/delete', methods=['POST'])
+def delete_cam_project():
+    try:
+        data = request.json
+        if not data:
+            raise ValueError("No JSON data received")
+            
+        project_name = data.get('project_name')
+        if not project_name:
+            raise ValueError("No project_name provided in request")
+            
+        print(f"Attempting to delete CAM project: {project_name}")
+        
+        # 프로젝트 디렉토리 경로 확인
+        paths = get_project_paths()
+        project_dir = os.path.join(paths['static_cam_results'], project_name)
+        
+        if os.path.exists(project_dir):
+            shutil.rmtree(project_dir)
+            print(f"Deleted CAM project directory: {project_dir}")
+            return jsonify({'message': f'Project "{project_name}" deleted successfully'})
+        else:
+            return jsonify({'message': f'Project "{project_name}" not found'}), 404
+            
+    except ValueError as e:
+        error_msg = f"Invalid request: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 400
+    except Exception as e:
+        error_msg = f"Error deleting CAM project: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 500
+
 @app.route('/api/perturbation/project/delete', methods=['POST'])
 def delete_perturbation_project():
     try:

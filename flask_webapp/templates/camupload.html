@@ -843,9 +843,16 @@
                         projectCard.className = 'col-md-4 mb-3';
                         projectCard.innerHTML = `
                             <div class="card h-100 project-card" data-project-name="${project.name}">
-                                <div class="card-header">
-                                    <h6 class="mb-0">${project.name}</h6>
-                                    <small class="text-muted">${project.image_count} images</small>
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">${project.name}</h6>
+                                        <small class="text-muted">${project.image_count} images</small>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="event.stopPropagation(); deleteProject('${project.name}')"
+                                            title="Delete project">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </div>
                                 <div class="card-body">
                                     <div class="row">
@@ -953,6 +960,35 @@
             .catch(error => {
                 console.error('Error loading project:', error);
                 alert('Failed to load project');
+            });
+        }
+
+        // 프로젝트 삭제 함수
+        function deleteProject(projectName) {
+            if (!confirm(`Are you sure you want to delete project "${projectName}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            fetch('/api/project/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                alert('Project deleted successfully!');
+                loadProjectList(); // 프로젝트 목록 새로고침
+            })
+            .catch(error => {
+                console.error('Error deleting project:', error);
+                alert('Failed to delete project: ' + error.message);
             });
         }
 
