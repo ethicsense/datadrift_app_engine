@@ -6,7 +6,6 @@ import cv2
 from typing import Dict, List, Tuple, Optional
 import base64
 from io import BytesIO
-from pytorch_grad_cam.utils.image import show_cam_on_image
 from yolo_cam.utils.image import show_cam_on_image as show_yolocam_on_image
 import os
 import multiprocessing as mp
