@@ -21,6 +21,11 @@
         .error {
             color: red;
         }
+        
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
         .list-group {
             border: 2px solid #000; /* 윤곽선 굵게 */
             height: 100%; /* 높이 설정 */
@@ -236,6 +241,18 @@
             const selected = document.querySelector('.list-group-item.active');
             if (selected) {
                 const datasetName = document.getElementById('selected-dataset').value;
+                
+                // 삭제 확인 팝업
+                if (!confirm(`Are you sure you want to delete the dataset "${datasetName}"?\n\nThis action cannot be undone.`)) {
+                    return;
+                }
+                
+                // 로딩 표시
+                const deleteBtn = document.querySelector('button[onclick="deleteDataset()"]');
+                const originalText = deleteBtn.innerHTML;
+                deleteBtn.innerHTML = '<i class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i> Deleting...';
+                deleteBtn.disabled = true;
+                
                 fetch(`delete_dataset`, {
                     method: 'POST',
                     headers: {
@@ -245,10 +262,36 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('status-log').innerHTML += `<div>${data.message.replace(/\n/g, "<br>")}</div>`;
-                    selected.remove(); // 목록에서 삭제
+                    // 성공 팝업 표시
+                    if (data.message) {
+                        // 성공 메시지를 팝업으로 표시
+                        const successMessage = data.message.replace(/\n/g, "\n");
+                        alert(`Dataset deleted successfully!\n\n${successMessage}`);
+                        
+                        // 목록에서 삭제
+                        selected.remove();
+                        
+                        // 선택 상태 초기화
+                        document.getElementById('selected-dataset').value = '';
+                        
+                        // status-log에도 기록
+                        document.getElementById('status-log').innerHTML += `<div class="success">Dataset "${datasetName}" deleted successfully</div>`;
+                    } else {
+                        alert('Dataset deleted successfully!');
+                        selected.remove();
+                        document.getElementById('selected-dataset').value = '';
+                        document.getElementById('status-log').innerHTML += `<div class="success">Dataset "${datasetName}" deleted successfully</div>`;
+                    }
                 })
-                .catch(error => console.error('Error deleting dataset:', error));
+                .catch(error => {
+                    console.error('Error deleting dataset:', error);
+                    alert('Error deleting dataset. Please try again.');
+                })
+                .finally(() => {
+                    // 버튼 상태 복원
+                    deleteBtn.innerHTML = originalText;
+                    deleteBtn.disabled = false;
+                });
             } else {
                 alert('Please select a dataset to delete.');
             }

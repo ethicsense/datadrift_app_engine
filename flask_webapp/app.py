@@ -556,15 +556,18 @@ def dataclinic():
 
 @app.route('/dsampler/export', methods=['POST'])
 def export_selected_view():
-    # FiftyOne Manager 초기화
-    fom_runner, fiftyone_thread = get_fiftyone_manager()
-    
-    # 선택된 뷰 가져오기
-    selected_view = request.form.get('selected_view')
-    selected_format = request.form.get('selected_format')
-    print(f"Selected view: {selected_view}, Selected format: {selected_format}")  # 디버깅을 위한 출력
+    try:
+        # FiftyOne Manager 초기화
+        fom_runner, fiftyone_thread = get_fiftyone_manager()
+        
+        # 선택된 뷰 가져오기
+        selected_view = request.form.get('selected_view')
+        selected_format = request.form.get('selected_format')
+        print(f"Selected view: {selected_view}, Selected format: {selected_format}")  # 디버깅을 위한 출력
 
-    if selected_view and selected_format:
+        if not selected_view or not selected_format:
+            return jsonify({'error': 'Please select both a view and format.'}), 400
+
         print(f"Exporting View: {selected_view}")
         view = fom_runner.session.dataset.load_saved_view(selected_view)
 
@@ -615,8 +618,24 @@ def export_selected_view():
             )
 
         print(f"Exported to {view_export_dir}")
+        
+        # 성공 메시지 구성
+        success_message = f"Dataset exported successfully!\n\n" \
+                         f"View: {selected_view}\n" \
+                         f"Format: {selected_format}\n" \
+                         f"Total samples: {num_samples}\n" \
+                         f"Export directory: {view_export_dir}\n\n" \
+                         f"Split distribution:\n" \
+                         f"- Train: {split_indices[0]} samples (70%)\n" \
+                         f"- Validation: {split_indices[1] - split_indices[0]} samples (20%)\n" \
+                         f"- Test: {num_samples - split_indices[1]} samples (10%)"
+        
+        return jsonify({'success': success_message})
 
-    return redirect(url_for('dataclinic'))
+    except Exception as e:
+        error_msg = f"Export failed: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/dsampler/train_page', methods=['GET', 'POST'])
 def train_page():

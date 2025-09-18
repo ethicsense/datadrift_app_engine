@@ -132,7 +132,17 @@
             form.addEventListener('submit', function(event) {
                 event.preventDefault(); // 폼의 기본 제출 동작을 막음
 
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                
+                // 로딩 상태 표시
+                submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i> Exporting...';
+                submitBtn.disabled = true;
+
                 const formData = new FormData(form);
+                const selectedView = formData.get('selected_view');
+                const selectedFormat = formData.get('selected_format');
+                
                 fetch('export', {
                     method: 'POST',
                     body: formData
@@ -140,13 +150,28 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        alert(data.error); // 에러 메시지를 알림창으로 표시
+                        // 에러 메시지를 팝업으로 표시
+                        alert(`Export failed!\n\nError: ${data.error}`);
                     } else {
-                        alert(data.success); // 성공 메시지를 알림창으로 표시
-                        window.location.href = 'dataclinic'; // 성공 시 리다이렉트
+                        // 성공 메시지를 팝업으로 표시
+                        const successMessage = data.success || `Dataset exported successfully!\n\nView: ${selectedView}\nFormat: ${selectedFormat}`;
+                        alert(`Export completed!\n\n${successMessage}`);
+                        
+                        // 페이지 새로고침 (선택사항)
+                        setTimeout(() => {
+                            window.location.href = 'dataclinic';
+                        }, 1000);
                     }
                 })
-                .catch(error => console.error('Error:', error));
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(`Export failed!\n\nNetwork error: ${error.message}`);
+                })
+                .finally(() => {
+                    // 버튼 상태 복원
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                });
             });
         });
     </script>
