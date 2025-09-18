@@ -164,7 +164,6 @@ def load_existing_dataset():
 
     # FiftyOne Manager 초기화
     fom_runner, fiftyone_thread = get_fiftyone_manager()
-
     embeddings_by_sample_id = fom_runner.collect_image_embeddings_by_sample_id(dataset, db_client=milvus_manager)
     results = fob.compute_visualization(
         dataset,
@@ -1712,17 +1711,12 @@ def perturbation_result():
         print(f"Error loading result data: {str(e)}")
         return redirect(url_for('perturbation_vis'))
 
-@app.route('/perturbation/re-edit-page')
-def perturbation_re_edit_page():
+@app.route('/perturbation/edit')
+def perturbation_edit_page():
     """재편집 전용 페이지"""
     paths = get_project_paths()
     models = [m for m in os.listdir(paths['models_dir'])]
-    return render_template('perturbation_re_edit.html', models=models)
-
-@app.route('/perturbation/re-edit')
-def perturbation_re_edit():
-    """재편집 전용 페이지"""
-    return render_template('perturbation_re_edit.html')
+    return render_template('perturbation_edit.html', models=models)
 
 @app.route('/api/perturbation/project/list', methods=['GET'])
 def get_perturbation_project_list():
@@ -1934,32 +1928,68 @@ def delete_perturbation_project():
         print(error_msg)
         return jsonify({'error': error_msg}), 500
 
-@app.route('/api/perturbation/check-re-edit-data')
-def check_re_edit_data():
-    """재편집 데이터가 있는지 확인하는 API"""
+@app.route('/api/perturbation/comparison/delete', methods=['POST'])
+def delete_perturbation_comparison():
     try:
-        re_edit_data = flask_session.get('re_edit_data')
+        data = request.json
+        if not data:
+            raise ValueError("No JSON data received")
+            
+        project_name = data.get('project_name')
+        comparison_timestamp = data.get('comparison_timestamp')
+        ca_directory = data.get('ca_directory')
         
-        if re_edit_data:
+        if not project_name or not comparison_timestamp or not ca_directory:
+            raise ValueError("Missing required parameters: project_name, comparison_timestamp, ca_directory")
+            
+        print(f"Attempting to delete perturbation comparison: {project_name}/{ca_directory}/{comparison_timestamp}")
+        
+        # 프로젝트 디렉토리 경로 확인
+        paths = get_project_paths()
+        comparison_dir = os.path.join(paths['static_perturbation_results'], project_name, ca_directory)
+        
+        if os.path.exists(comparison_dir):
+            shutil.rmtree(comparison_dir)
+            print(f"Deleted perturbation comparison directory: {comparison_dir}")
+            return jsonify({'message': f'Comparison "{ca_directory}" deleted successfully'})
+        else:
+            return jsonify({'error': f'Comparison "{ca_directory}" not found'}), 404
+            
+    except ValueError as e:
+        error_msg = f"Invalid request: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 400
+    except Exception as e:
+        error_msg = f"Error deleting perturbation comparison: {str(e)}"
+        print(error_msg)
+        return jsonify({'error': error_msg}), 500
+
+@app.route('/api/perturbation/check-edit-data')
+def check_edit_data():
+    """편집 데이터가 있는지 확인하는 API"""
+    try:
+        edit_data = flask_session.get('edit_data')
+        
+        if edit_data:
             return jsonify({
-                'has_re_edit_data': True,
-                're_edit_data': re_edit_data
+                'has_edit_data': True,
+                'edit_data': edit_data
             })
         else:
             return jsonify({
-                'has_re_edit_data': False
+                'has_edit_data': False
             })
             
     except Exception as e:
-        print(f"Error in check_re_edit_data: {str(e)}")
+        print(f"Error in check_edit_data: {str(e)}")
         return jsonify({
-            'has_re_edit_data': False,
+            'has_edit_data': False,
             'error': str(e)
         }), 500
 
-@app.route('/api/perturbation/re-edit', methods=['POST'])
-def re_edit_perturbation():
-    """현재 보고 있는 perturbation 프로젝트를 재편집하기 위한 API"""
+@app.route('/api/perturbation/edit', methods=['POST'])
+def edit_perturbation():
+    """현재 보고 있는 perturbation 프로젝트를 편집하기 위한 API"""
     try:
         data = request.json
         project_name = data.get('project_name')
@@ -1985,18 +2015,18 @@ def re_edit_perturbation():
             print(f"Project name mismatch: session={session_project_name}, requested={project_name}")
             return jsonify({'error': f'Project name mismatch. Current: {session_project_name}, Requested: {project_name}'}), 400
         
-        # 재편집을 위한 데이터 구성 (최소한의 데이터만)
-        re_edit_data = {
+        # 편집을 위한 데이터 구성 (최소한의 데이터만)
+        edit_data = {
             'project_name': project_name,
             'timestamp': session_timestamp,
             'has_settings': True
         }
         
-        # 세션에 재편집 데이터 저장 (최소화)
-        flask_session['re_edit_data'] = re_edit_data
+        # 세션에 편집 데이터 저장 (최소화)
+        flask_session['edit_data'] = edit_data
         
-        print(f"Re-edit data prepared for project: {project_name}")
-        print(f"Re-edit data: {re_edit_data}")
+        print(f"Edit data prepared for project: {project_name}")
+        print(f"Edit data: {edit_data}")
         
         return jsonify({
             'success': True,
@@ -2004,12 +2034,12 @@ def re_edit_perturbation():
         })
         
     except Exception as e:
-        print(f"Error in re_edit_perturbation: {str(e)}")
+        print(f"Error in edit_perturbation: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/perturbation/get-re-edit-data', methods=['POST'])
-def get_re_edit_data():
-    """재편집에 필요한 데이터를 파일에서 직접 로드하는 API"""
+@app.route('/api/perturbation/get-edit-data', methods=['POST'])
+def get_edit_data():
+    """편집에 필요한 데이터를 파일에서 직접 로드하는 API"""
     try:
         data = request.json
         project_name = data.get('project_name')
@@ -2033,8 +2063,8 @@ def get_re_edit_data():
         with open(result_data_file, 'r') as f:
             result_data = json.load(f)
         
-        # 재편집에 필요한 데이터만 반환
-        re_edit_data = {
+        # 편집에 필요한 데이터만 반환
+        edit_data = {
             'project_name': project_name,
             'original_image': result_data.get('original_image'),
             'perturbation_settings': result_data.get('perturbation_settings'),
@@ -2043,11 +2073,11 @@ def get_re_edit_data():
         
         return jsonify({
             'success': True,
-            're_edit_data': re_edit_data
+            'edit_data': edit_data
         })
         
     except Exception as e:
-        print(f"Error in get_re_edit_data: {str(e)}")
+        print(f"Error in get_edit_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2059,7 +2089,7 @@ def perturbation_compare_page():
 
 @app.route('/api/perturbation/comparisons/<project_name>')
 def get_perturbation_comparisons(project_name):
-    """특정 프로젝트의 re-edit 비교 목록을 반환 (간단한 폴더 스캔)"""
+    """특정 프로젝트의 edit 비교 목록을 반환 (간단한 폴더 스캔)"""
     try:
         # 프로젝트 경로 가져오기
         paths = get_project_paths()
@@ -2078,14 +2108,14 @@ def get_perturbation_comparisons(project_name):
                 # ca 폴더 내의 이미지 파일들 찾기
                 image_files = []
                 for file in os.listdir(ca_dir):
-                    if file.endswith('_re_edit_perturbed.jpg'):
+                    if file.endswith('_edit_perturbed.jpg'):
                         image_files.append(file)
                 
                 if image_files:
                     # 가장 최근 이미지 파일 사용
                     latest_image = max(image_files)
                     # 파일명에서 timestamp 추출
-                    timestamp = latest_image.replace('_re_edit_perturbed.jpg', '')
+                    timestamp = latest_image.replace('_edit_perturbed.jpg', '')
                     
                     comparisons.append({
                         'ca_directory': item,
@@ -2155,7 +2185,7 @@ def get_perturbation_result_data(project_name, timestamp):
 
 @app.route('/api/perturbation/compare', methods=['POST'])
 def run_perturbation_comparison():
-    """re-edit된 교란을 적용하고 기존 프로젝트와 비교 분석 수행"""
+    """edit된 교란을 적용하고 기존 프로젝트와 비교 분석 수행"""
     try:
         # 폼 데이터에서 값들 가져오기
         project_name = request.form.get('projectName')
@@ -2195,7 +2225,7 @@ def run_perturbation_comparison():
         with open(original_result_path, 'r') as f:
             original_data = json.load(f)
         
-        # re-edit 설정을 폼 데이터에서 직접 가져오기
+        # edit 설정을 폼 데이터에서 직접 가져오기
         masking_type = request.form.get('masking_type')
         mask_data_str = request.form.get('mask_data')
         canvas_width = int(request.form.get('canvas_width', 1000))
@@ -2257,7 +2287,7 @@ def run_perturbation_comparison():
             print(f"Failed to load image from: {original_image_path}")
             return jsonify({'error': f'Failed to load original image: {original_image_path}'}), 404
         
-        # re-edit 설정 구성 (이미지 로드 후)
+        # edit 설정 구성 (이미지 로드 후)
         updated_settings = {
             'masking_type': masking_type,
             'mask_data': mask_data,
@@ -2278,7 +2308,7 @@ def run_perturbation_comparison():
             }
         }
         
-        print(f"Applying re-edit perturbation to original image...")
+        print(f"Applying edit perturbation to original image...")
         print(f"Masking type: {masking_type}")
         print(f"Extra perturbations: {extra_perturbations}")
         
@@ -2301,19 +2331,19 @@ def run_perturbation_comparison():
         # 모델 입력 크기로 리사이즈 (640x640)
         model_input_img = cv2.resize(perturbed_img, (640, 640))
         
-        # 모델 추론 수행 (re-edit perturbed image만)
-        print("Performing inference on re-edit perturbed image...")
+        # 모델 추론 수행 (edit perturbed image만)
+        print("Performing inference on edit perturbed image...")
         
-        # re-edit 교란된 이미지 추론
-        re_edit_results = model(model_input_img)
-        re_edit_boxes, re_edit_colors, re_edit_names = parse_detections(re_edit_results)
+        # edit 교란된 이미지 추론
+        edit_results = model(model_input_img)
+        edit_boxes, edit_colors, edit_names = parse_detections(edit_results)
         
         # 기존 perturbed image 데이터 재사용 (추론 불필요)
         original_detections = original_data['perturbed_detections']  # 기존 교란된 이미지의 검출 결과
         
-        # re-edit 교란된 이미지 추론 결과 저장
-        re_edit_detections = []
-        for i, result in enumerate(re_edit_results):
+        # edit 교란된 이미지 추론 결과 저장
+        edit_detections = []
+        for i, result in enumerate(edit_results):
             if len(result.boxes) > 0:
                 for j in range(len(result.boxes)):
                     detection = {
@@ -2321,12 +2351,12 @@ def run_perturbation_comparison():
                         'confidence': float(result.boxes.conf[j]),
                         'bbox': result.boxes.xyxy[j].cpu().numpy().tolist(),
                         'class_id': int(result.boxes.cls[j]),
-                        'detection_id': f"re_edit_{i}_{j}"
+                        'detection_id': f"edit_{i}_{j}"
                     }
-                    re_edit_detections.append(detection)
+                    edit_detections.append(detection)
         
-        # 객체 매칭 (기존 perturbed vs re-edit perturbed)
-        matched_pairs = match_objects(original_detections, re_edit_detections)
+        # 객체 매칭 (기존 perturbed vs edit perturbed)
+        matched_pairs = match_objects(original_detections, edit_detections)
         
         # 추론 결과 이미지 생성
         # 기존 perturbed inference image는 기존 데이터에서 가져오기
@@ -2341,24 +2371,24 @@ def run_perturbation_comparison():
             print(f"Failed to load original inference image from: {original_inference_path}")
             return jsonify({'error': f'Failed to load original inference image: {original_inference_path}'}), 404
         
-        # re-edit perturbed inference image 생성
-        re_edit_inference_img = draw_detections(re_edit_boxes, re_edit_colors, re_edit_names, model_input_img.copy())
+        # edit perturbed inference image 생성
+        edit_inference_img = draw_detections(edit_boxes, edit_colors, edit_names, model_input_img.copy())
         
         # 이미지 저장
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # re-edit 교란된 이미지만 저장 (기존 이미지는 경로 참조)
-        re_edit_perturbed_path = os.path.join(ca_dir, f'{timestamp}_re_edit_perturbed.jpg')
-        cv2.imwrite(re_edit_perturbed_path, cv2.cvtColor(perturbed_img, cv2.COLOR_RGB2BGR))
+        # edit 교란된 이미지만 저장 (기존 이미지는 경로 참조)
+        edit_perturbed_path = os.path.join(ca_dir, f'{timestamp}_edit_perturbed.jpg')
+        cv2.imwrite(edit_perturbed_path, cv2.cvtColor(perturbed_img, cv2.COLOR_RGB2BGR))
         
-        # re-edit 추론 결과 이미지만 저장 (기존 추론 결과는 경로 참조)
-        re_edit_inference_save_path = os.path.join(ca_dir, f'{timestamp}_re_edit_perturbed_inference.jpg')
-        cv2.imwrite(re_edit_inference_save_path, cv2.cvtColor(re_edit_inference_img, cv2.COLOR_RGB2BGR))
+        # edit 추론 결과 이미지만 저장 (기존 추론 결과는 경로 참조)
+        edit_inference_save_path = os.path.join(ca_dir, f'{timestamp}_edit_perturbed_inference.jpg')
+        cv2.imwrite(edit_inference_save_path, cv2.cvtColor(edit_inference_img, cv2.COLOR_RGB2BGR))
         
-        # 비교 분석 수행 (기존 perturbed vs re-edit perturbed)
+        # 비교 분석 수행 (기존 perturbed vs edit perturbed)
         comparison_analysis = perform_comparison_analysis(original_data, {
             'original_detections': original_detections,  # 기존 perturbed detections
-            'perturbed_detections': re_edit_detections,  # re-edit perturbed detections
+            'perturbed_detections': edit_detections,  # edit perturbed detections
             'matched_pairs': matched_pairs
         }, updated_settings)
         
@@ -2372,10 +2402,10 @@ def run_perturbation_comparison():
             'original_perturbed_image': original_data['perturbed_image'],  # 기존 교란된 이미지 경로
             'original_perturbed_inference_image': original_data['perturbed_inference_image'],  # 기존 추론 결과 경로
             # 새로 생성된 이미지들은 ca 디렉터리 경로
-            're_edit_perturbed_image': f'perturbation_results/{project_name}/{os.path.basename(ca_dir)}/{timestamp}_re_edit_perturbed.jpg',
-            're_edit_perturbed_inference_image': f'perturbation_results/{project_name}/{os.path.basename(ca_dir)}/{timestamp}_re_edit_perturbed_inference.jpg',
+            'edit_perturbed_image': f'perturbation_results/{project_name}/{os.path.basename(ca_dir)}/{timestamp}_edit_perturbed.jpg',
+            'edit_perturbed_inference_image': f'perturbation_results/{project_name}/{os.path.basename(ca_dir)}/{timestamp}_edit_perturbed_inference.jpg',
             'original_perturbed_detections': original_detections,  # 기존 perturbed detections
-            're_edit_perturbed_detections': re_edit_detections,    # re-edit perturbed detections
+            'edit_perturbed_detections': edit_detections,    # edit perturbed detections
             'matched_pairs': matched_pairs,
             'comparison_analysis': comparison_analysis,
             'perturbation_settings': updated_settings,
@@ -2421,8 +2451,8 @@ def perform_comparison_analysis(original_data, comparison_results, updated_setti
     
     # 기본 통계
     original_objects = len(original_data['perturbed_detections'])  # 기존 perturbed detections
-    updated_objects = len(comparison_results['perturbed_detections'])  # re-edit perturbed detections
-    comparison_objects = len(comparison_results['perturbed_detections'])  # re-edit perturbed detections
+    updated_objects = len(comparison_results['perturbed_detections'])  # edit perturbed detections
+    comparison_objects = len(comparison_results['perturbed_detections'])  # edit perturbed detections
     
     # 클래스별 분석
     def get_class_distribution(detections):
@@ -2435,8 +2465,8 @@ def perform_comparison_analysis(original_data, comparison_results, updated_setti
         return class_dist
     
     original_classes = get_class_distribution(original_data['perturbed_detections'])  # 기존 perturbed detections
-    updated_classes = get_class_distribution(comparison_results['perturbed_detections'])  # re-edit perturbed detections
-    comparison_classes = get_class_distribution(comparison_results['perturbed_detections'])  # re-edit perturbed detections
+    updated_classes = get_class_distribution(comparison_results['perturbed_detections'])  # edit perturbed detections
+    comparison_classes = get_class_distribution(comparison_results['perturbed_detections'])  # edit perturbed detections
     
     # 컨피던스 분석
     def get_confidence_stats(detections):
@@ -2450,8 +2480,8 @@ def perform_comparison_analysis(original_data, comparison_results, updated_setti
         }
     
     original_conf = get_confidence_stats(original_data['perturbed_detections'])  # 기존 perturbed detections
-    updated_conf = get_confidence_stats(comparison_results['perturbed_detections'])  # re-edit perturbed detections
-    comparison_conf = get_confidence_stats(comparison_results['perturbed_detections'])  # re-edit perturbed detections
+    updated_conf = get_confidence_stats(comparison_results['perturbed_detections'])  # edit perturbed detections
+    comparison_conf = get_confidence_stats(comparison_results['perturbed_detections'])  # edit perturbed detections
     
     # 교란 설정 변화
     original_settings = original_data['perturbation_settings']

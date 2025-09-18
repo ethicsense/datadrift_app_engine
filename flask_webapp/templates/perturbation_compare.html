@@ -483,11 +483,11 @@
         function displayUpdatedData(data) {
             console.log('Displaying updated data:', data);
             
-            // 추론 결과 이미지 표시 (re-edit된 추론 결과)
-            document.getElementById('updatedInference').src = `/static/${data.re_edit_perturbed_inference_image}`;
+            // 추론 결과 이미지 표시 (edit된 추론 결과)
+            document.getElementById('updatedInference').src = `/static/${data.edit_perturbed_inference_image}`;
             
-            // 통계 표시 (re-edit된 검출 결과)
-            const detectionCount = data.re_edit_perturbed_detections ? data.re_edit_perturbed_detections.length : 0;
+            // 통계 표시 (edit된 검출 결과)
+            const detectionCount = data.edit_perturbed_detections ? data.edit_perturbed_detections.length : 0;
             document.getElementById('updatedObjectCount').textContent = detectionCount;
             
             // 전역 변수에 저장
@@ -511,7 +511,7 @@
 
             // 객체 수 변화
             const originalCount = window.originalData.perturbed_detections ? window.originalData.perturbed_detections.length : 0;
-            const updatedCount = window.updatedData.re_edit_perturbed_detections ? window.updatedData.re_edit_perturbed_detections.length : 0;
+            const updatedCount = window.updatedData.edit_perturbed_detections ? window.updatedData.edit_perturbed_detections.length : 0;
             const countChange = updatedCount - originalCount;
             
             console.log('Object count comparison:', {
@@ -519,7 +519,7 @@
                 updatedCount,
                 countChange,
                 originalDetections: window.originalData.perturbed_detections,
-                updatedDetections: window.updatedData.re_edit_perturbed_detections
+                updatedDetections: window.updatedData.edit_perturbed_detections
             });
             
             document.getElementById('objectCountChange').textContent = 
@@ -623,7 +623,7 @@
         // 검출 결과 비교
         function compareDetectionResults() {
             const originalDetections = window.originalData.perturbed_detections;
-            const updatedDetections = window.updatedData.re_edit_perturbed_detections;
+            const updatedDetections = window.updatedData.edit_perturbed_detections;
             
             console.log('Comparing detection results:', {
                 originalDetections,

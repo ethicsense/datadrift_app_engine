@@ -161,7 +161,7 @@ class TensorboardManager:
     def stop(self):
         if self.tensorboard_process:
             self.tensorboard_process.terminate()
-            self.tensorboard_process.wait()\
+            self.tensorboard_process.wait()
     
 class FiftyoneManager:
     def __init__(self, port):
