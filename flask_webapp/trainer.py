@@ -25,8 +25,28 @@ def train_yolo(data_path, model_path, project="runs", name="exp", epochs=100, ba
         device = "cpu"
         print("Using CPU")
 
-    # project 경로 앞에 'logs' 추가
-    project_path = os.path.join("logs", project)
+    # ddoc 패키지 내에서 flask_webapp 모듈의 경로를 찾아서 logs 디렉토리 설정
+    try:
+        # ddoc.flask_webapp 모듈을 import해서 경로 찾기
+        import ddoc.flask_webapp as flask_webapp_module
+        flask_webapp_dir = os.path.dirname(flask_webapp_module.__file__)
+    except ImportError:
+        try:
+            # 직접 flask_webapp import 시도
+            import flask_webapp
+            flask_webapp_dir = os.path.dirname(flask_webapp.__file__)
+        except ImportError:
+            # 개발 환경에서 현재 파일 기준으로 설정
+            print("🔧 Error: flask_webapp module not found")
+            print("🔧 Development mode: Using local file path for flask_webapp directory")
+            flask_webapp_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    project_path = os.path.join(flask_webapp_dir, "logs", project)
+    
+    # logs 디렉토리가 존재하지 않으면 생성
+    os.makedirs(project_path, exist_ok=True)
+    
+    print(f"Model and logs will be saved to: {project_path}")
     
     model = YOLO(model_path)
     model.train(
@@ -38,7 +58,7 @@ def train_yolo(data_path, model_path, project="runs", name="exp", epochs=100, ba
         device=device,
         project=project_path,  # 수정된 project 경로 사용
         name=name,
-        exist_ok=True
+        exist_ok=True,
     )
     print("Training completed.")
 
