@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.16] - 2025-01-27
+
+### Added
+- **Perturbation Edit Project Deletion Feature**
+  - Added comparison history deletion functionality in perturbation edit page
+  - New API endpoint `/api/perturbation/comparison/delete` for deleting individual comparison results
+  - Delete button with confirmation dialog for each comparison in edit history
+  - Automatic refresh of comparison list after deletion
+  - Enhanced UI with delete buttons alongside view buttons
+
+### Changed
+- **Terminology Standardization**
+  - Renamed all "re-edit" references to "edit" throughout the project for consistency
+  - Updated API endpoints: `/api/perturbation/re-edit` → `/api/perturbation/edit`
+  - Updated API endpoints: `/api/perturbation/get-re-edit-data` → `/api/perturbation/get-edit-data`
+  - Updated API endpoints: `/api/perturbation/check-re-edit-data` → `/api/perturbation/check-edit-data`
+  - Updated route: `/perturbation/re-edit-page` → `/perturbation/edit`
+  - Updated function names and variable names for consistency
+  - Updated UI text and comments to use "edit" terminology
+
+### Fixed
+- Removed duplicate route definitions in Flask application
+- Fixed template references after terminology changes
+- Improved error handling in comparison deletion functionality
+
+## [1.0.15] - 2025-01-20
+
+### Added
+- **TensorBoard Logging Enhancements**
+  - Comprehensive TensorBoard integration for model training monitoring
+  - Real-time loss and accuracy tracking during training sessions
+  - Model graph visualization and histogram logging
+  - Enhanced logging configuration for better debugging and monitoring
+  - Training metrics visualization in TensorBoard dashboard
+
+### Fixed
+- **TensorBoard Integration Issues**
+  - Fixed TensorBoard log directory path resolution
+  - Resolved logging conflicts between different training sessions
+  - Fixed model checkpoint saving with proper TensorBoard integration
+  - Improved log file management and cleanup
+  - Fixed TensorBoard server startup and port configuration
+
+### Changed
+- **Training Infrastructure Improvements**
+  - Enhanced trainer.py with better TensorBoard logging capabilities
+  - Improved model training loop with comprehensive metrics tracking
+  - Updated logging configuration for better performance monitoring
+  - Enhanced error handling during training sessions
+
 ## [1.0.14] - 2025-09-16
 
 ### Added
