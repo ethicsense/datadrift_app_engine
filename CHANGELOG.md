@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.17] - 2025-01-27
+
+### Added
+- **Netron Package Integration**
+  - Added netron package to build dependencies for neural network model visualization
+  - Enhanced model visualization capabilities for better model analysis and debugging
+
 ## [1.0.16] - 2025-01-27
 
 ### Added
