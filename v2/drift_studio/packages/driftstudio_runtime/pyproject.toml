@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "driftstudio_runtime"
+version = "0.1.0"
+description = "driftstudio_runtime package for drift_studio"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=2.7",
+  "driftstudio_spec>=0.1.0",
+  "pyyaml>=6.0.0,<7.0.0",
+]
+
+[tool.setuptools]
+packages = {find = {where = ["packages"], include = ["driftstudio_runtime*"]}}

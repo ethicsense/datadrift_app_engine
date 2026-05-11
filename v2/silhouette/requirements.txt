@@ -1,0 +1,14 @@
+pandas
+pyarrow
+plotly
+numpy
+Pillow
+duckdb
+qdrant-client
+open_clip_torch
+torch
+sentence-transformers
+fastapi
+uvicorn
+PyYAML
+

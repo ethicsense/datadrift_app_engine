@@ -1,0 +1,40 @@
+# datasets, exp files
+sandbox/
+storage/
+
+# virtual env | env config
+venv/
+.env
+.env.*
+
+# python cache
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+dist/
+build/
+*.egg-info/
+
+# os | editor | IDE
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+.cursorrules
+.cursorignore
+.cursorignorerules
+.cursorignorerulesrules
+.cursorignorerulesrulesrules
+.cursorignorerulesrulesrulesrules
+.cursorignorerulesrulesrulesrulesrules
+
+# ddoc logs
+analysis/
+.ddoc/
+.ddoc_metadata/

@@ -1,0 +1,63 @@
+datasets:
+- name: test_data
+  path: datasets/test_data
+  formats:
+  - .jpg
+  - .png
+  description: Dataset test_data
+- name: test_yolo_sample
+  path: datasets/test_yolo_sample
+  formats:
+  - .jpg
+  - .png
+  description: Dataset test_yolo_sample
+- name: yolo_reference
+  path: datasets/yolo_reference
+  formats:
+  - .jpg
+  - .png
+  description: Dataset yolo_reference
+- name: yolo_current
+  path: datasets/yolo_current
+  formats:
+  - .jpg
+  - .png
+  description: Dataset yolo_current
+- name: yolo_target
+  path: datasets/yolo_target
+  formats:
+  - .jpg
+  - .png
+  description: Dataset yolo_target
+- name: test_yolo
+  path: datasets/test_yolo
+  formats:
+  - .jpg
+  - .png
+  description: Dataset test_yolo
+experiments:
+  exp_ref:
+    model: yolov8n.pt
+    dataset: yolo_reference
+    epochs: 2
+    batch: 8
+    imgsz: 640
+    device: cpu
+    description: Reference model trained on yolo_reference dataset
+  exp_cur:
+    model: yolov8n.pt
+    dataset: yolo_current
+    epochs: 2
+    batch: 8
+    imgsz: 640
+    device: cpu
+    description: Current model trained on yolo_current dataset
+drift_analysis:
+  target_vs_ref:
+    reference: yolo_target
+    current: yolo_reference
+    output: analysis/drift_target_vs_ref
+  target_vs_cur:
+    reference: yolo_target
+    current: yolo_current
+    output: analysis/drift_target_vs_cur

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Drift Report — {{ base_label }} vs {{ target_label }}</title>
+  <style>
+{% include 'report_styles.inc.html' %}
+  </style>
+</head>
+<body>
+  <h1>드리프트 비교 리포트</h1>
+  <div class="subtitle">
+    Base: <strong>{{ base_label }}</strong>
+    · Target: <strong>{{ target_label }}</strong>
+    · 생성 시각: {{ generated_at }}
+    · driftstudio_reports {{ report_version }}
+  </div>
+
+  <h2>Executive summary</h2>
+  <div class="callout">
+    <ul class="bullets">
+      {% for line in drift_executive_bullets %}
+        <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <h2>드리프트 핵심 지표</h2>
+  {% if drift_kpi_rows and drift_kpi_rows|length > 0 %}
+  <table class="kpi">
+    {% for row in drift_kpi_rows %}
+    <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="note">드리프트 KPI를 구성할 수 없습니다. 부록 JSON을 확인하세요.</p>
+  {% endif %}
+
+  <h2>해석 · 품질 메모 (드리프트)</h2>
+  <ul class="bullets">
+    {% for q in drift_quality_notes %}
+    <li>{{ q }}</li>
+    {% endfor %}
+  </ul>
+
+  <h2>드리프트 차트</h2>
+  {% if chart_blocks_drift and chart_blocks_drift|length > 0 %}
+  <p class="note">Base(파랑)와 Target(주황) 분포·점수 비교.</p>
+    {% for block in chart_blocks_drift %}
+      <div class="chart">
+        <div class="chart-title">{{ block.title }}</div>
+        {% if block.caption %}<div class="chart-caption">{{ block.caption }}</div>{% endif %}
+        {% if block.svg_left and block.svg_right %}
+        <table class="pdf-two-col">
+          <tr>
+            <td style="padding-right:8px;">
+              <div class="note" style="margin-bottom:4px;">{{ block.left_label or "left" }}</div>
+              {{ block.svg_left | safe }}
+            </td>
+            <td style="padding-left:8px;">
+              <div class="note" style="margin-bottom:4px;">{{ block.right_label or "right" }}</div>
+              {{ block.svg_right | safe }}
+            </td>
+          </tr>
+        </table>
+        {% else %}
+        {{ block.svg | safe }}
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="note">표시할 드리프트 차트가 없습니다.</p>
+  {% endif %}
+
+  <h2>부록 — 드리프트 결과 (JSON, 축약)</h2>
+  <p class="note">{{ drift_appendix_explanation }}</p>
+  <pre class="appendix">{{ drift_json }}</pre>
+
+  <h2>부록 — 실행 메타 (플랜)</h2>
+  <table class="meta-table">
+    <tr><td>플랜 이름</td><td>{{ plan_name }}</td></tr>
+    <tr><td>플랜 모달리티</td><td>{{ plan_modality }}</td></tr>
+  </table>
+
+  <footer>
+    드리프트 리포트 PDF는 WeasyPrint로 생성되었습니다. 재현을 위해 동일 버전의 driftstudio_reports 및 ddoc 플러그인 환경을 사용하세요.
+  </footer>
+</body>
+</html>

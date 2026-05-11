@@ -1,0 +1,22 @@
+# datas
+data/
+logs/
+output/
+
+# caches
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+.cursor/
+.cursor/plans/
+.cursor/plans/
+
+# venv
+silhouette_venv/
+.venv/
+
+# frontend
+apps/visualization-web/node_modules/
+apps/visualization-web/dist/
+apps/visualization-web/.tmp/

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>EDA Report — {{ name }}</title>
+  <style>
+{% include 'report_styles.inc.html' %}
+  </style>
+</head>
+<body>
+  <h1>EDA 분석 리포트</h1>
+  <div class="subtitle">
+    데이터셋: <strong>{{ name }}</strong>
+    · 생성 시각: {{ generated_at }}
+    · driftstudio_reports {{ report_version }}
+  </div>
+
+  <h2>Executive summary</h2>
+  <div class="callout">
+    <ul class="bullets">
+      {% for line in executive_bullets %}
+        <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <h2>핵심 지표 (KPI)</h2>
+  {% if kpi_rows and kpi_rows|length > 0 %}
+  <table class="kpi">
+    {% for row in kpi_rows %}
+    <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="note">요약에서 추출할 KPI가 없습니다.</p>
+  {% endif %}
+
+  <h2>데이터셋 개요</h2>
+  <div class="grid2">
+    <div class="card">
+      <div class="k">Rows</div>
+      <div class="v">{% if rows %}{{ rows }}{% else %}N/A{% endif %}</div>
+      {% if rows_cols_note %}<p class="note" style="margin-top:8px;">{{ rows_cols_note }}</p>{% endif %}
+    </div>
+    <div class="card">
+      <div class="k">Cols</div>
+      <div class="v">{% if cols %}{{ cols }}{% else %}N/A{% endif %}</div>
+      <div class="k" style="margin-top:10px;">모달리티</div>
+      <div class="v" style="font-size:14px;">{{ modality }}</div>
+    </div>
+  </div>
+
+  <h2>데이터 품질 · 해석 메모</h2>
+  <ul class="bullets">
+    {% for q in quality_notes %}
+    <li>{{ q }}</li>
+    {% endfor %}
+  </ul>
+
+  <h2>차트</h2>
+  {% if chart_blocks and chart_blocks|length > 0 %}
+    {% for block in chart_blocks %}
+      <div class="chart">
+        <div class="chart-title">{{ block.title }}</div>
+        {% if block.caption %}<div class="chart-caption">{{ block.caption }}</div>{% endif %}
+        {{ block.svg | safe }}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="note">표시할 차트 데이터가 없습니다.</p>
+  {% endif %}
+
+  <h2>결측 (Missing)</h2>
+  {% if missing_note %}
+  <div class="callout callout-warn">{{ missing_note }}</div>
+  {% endif %}
+  <h3>결측률 (원시 JSON)</h3>
+  <pre class="appendix">{{ missing_json }}</pre>
+
+  <h2>부록 A — 요약 (원시 JSON)</h2>
+  <pre class="appendix">{{ summary_json }}</pre>
+
+  <h2>부록 B — 실행 메타 (플랜)</h2>
+  <table class="meta-table">
+    <tr><td>플랜 이름</td><td>{{ plan_name }}</td></tr>
+    <tr><td>플랜 모달리티</td><td>{{ plan_modality }}</td></tr>
+  </table>
+
+  <footer>
+    PDF는 WeasyPrint로 생성되었습니다. 재현을 위해 동일 버전의 driftstudio_reports 및 ddoc 플러그인 환경을 사용하세요.
+  </footer>
+</body>
+</html>
