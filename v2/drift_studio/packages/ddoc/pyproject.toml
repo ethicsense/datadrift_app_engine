@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddoc"
+version = "2.1.0"
+description = "ddoc: AI data and model management tools as data drift solutions"
+license = {text = "Apache2.0"}
+readme = "README.md"
+requires-python = ">=3.8"
+#release_date = "2025-10-20"
+#ddoc_hub_url = "http://127.0.0.1:8000"
+#reserved = ""
+
+authors = [
+  { name = "JPark", email = "feynmanc@naver.com" }
+]
+
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "requests",
+  "pandas",
+  "numpy",
+  "scikit-learn",
+  "pyyaml",
+  "fpdf",
+  "weasyprint>=62.0,<63.0",
+  "pydyf<0.11",
+  "pluggy>=1.5.0",
+  "typer>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.7",
+  "networkx",
+  "dotenv",
+  "mlflow>=2.0.0",
+]
+
+[project.optional-dependencies]
+vision = [
+  "torch>=2.0.0",
+  "torchvision>=0.15.0",
+  "clip @ git+https://github.com/openai/CLIP.git",
+  "pillow>=9.0.0",
+  "matplotlib>=3.5.0",
+  "seaborn>=0.11.0",
+  "scikit-image>=0.19.0",
+  "scipy>=1.7.0",
+  "PyWavelets>=1.4.0",
+  "yellowbrick>=1.5",
+]
+text = [
+  "ddoc-plugin-text @ file://./plugins/ddoc-plugin-text",
+]
+audio = [
+  "ddoc-plugin-audio-wave @ file://./plugins/ddoc-plugin-audio-wave",
+]
+timeseries = [
+  "ddoc-plugin-timeseries @ file://./plugins/ddoc-plugin-timeseries",
+]
+yolo = [
+  "ultralytics>=8.0.0; python_version >= '3.10'",
+  "ultralytics>=7.0.0,<8.0.0; python_version < '3.10'",
+  "torch>=2.0.0",
+  "torchvision>=0.15.0",
+  "opencv-python>=4.6.0",
+]
+nlp = [
+  # NLP dependencies will be added when needed
+]
+vis = [
+  "streamlit>=1.28.0",
+]
+all = [
+  # Vision dependencies
+  "torch>=2.0.0",
+  "torchvision>=0.15.0",
+  "clip @ git+https://github.com/openai/CLIP.git",
+  "pillow>=9.0.0",
+  "matplotlib>=3.5.0",
+  "seaborn>=0.11.0",
+  "scikit-image>=0.19.0",
+  "scipy>=1.7.0",
+  "PyWavelets>=1.4.0",
+  "yellowbrick>=1.5",
+  # YOLO dependencies
+  "ultralytics>=8.0.0; python_version >= '3.10'",
+  "ultralytics>=7.0.0,<8.0.0; python_version < '3.10'",
+  "opencv-python>=4.6.0",
+  # Visualization dependencies
+  "streamlit>=1.28.0",
+  # Plugin packages
+  "ddoc-plugin-vision-image @ file://./plugins/ddoc-plugin-vision-image",
+  "ddoc-plugin-yolo @ file://./plugins/ddoc-plugin-yolo",
+  "ddoc-plugin-vis @ file://./plugins/ddoc-plugin-vis",
+]
+
+[project.scripts]
+ddoc = "ddoc.cli.main:app"
+
+[tool.setuptools]
+packages = {find = {where = ["."], include = ["ddoc*"]}}
+include-package-data = true  # ✅ 이 줄을 여기에 두세요 (boolean 값)
+
+[tool.setuptools.package-data]
+ddoc = [
+  "fonts/NanumGothicCoding-Bold.ttf",
+  "fonts/NanumGothicCoding-Regular.ttf",
+  "config/config.json"
+]

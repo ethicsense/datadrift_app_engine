@@ -1,0 +1,58 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${SILHOUETTE_QDRANT_PORT:-38633}:6333"
+    volumes:
+      - ./output/qdrant_storage:/qdrant/storage
+
+  analytics-pipeline:
+    build:
+      context: .
+      dockerfile: apps/analytics-pipeline/Dockerfile
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      SILHOUETTE_OUTPUT_DIR: /app/output/analytics
+      SILHOUETTE_DATASETS_ROOT: /app/output
+    command: >
+      sh -c "python scripts/preflight_data.py data &&
+             python scripts/wait_for_http.py http://qdrant:6333/collections 90 &&
+             python -m analytics.pipeline.build_dataset --data-dir data --output-dir output/analytics --qdrant-url http://qdrant:6333"
+    depends_on:
+      - qdrant
+
+  visualization-api:
+    build:
+      context: .
+      dockerfile: apps/visualization-api/Dockerfile
+    environment:
+      SILHOUETTE_OUTPUT_DIR: /app/output/analytics
+      SILHOUETTE_DATASETS_ROOT: /app/output
+      SILHOUETTE_WORKSPACE_ROOT: /app
+    volumes:
+      - ./output:/app/output
+      # image_segments / 투영 산출물의 image_path가 data/... 상대경로일 때 product-image 엔드포인트가 파일을 읽을 수 있게 함
+      - ./data:/app/data
+    ports:
+      - "${SILHOUETTE_API_PORT:-38000}:8000"
+    depends_on:
+      analytics-pipeline:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  visualization-web:
+    build:
+      context: .
+      dockerfile: apps/visualization-web/Dockerfile
+    depends_on:
+      visualization-api:
+        condition: service_healthy
+    ports:
+      - "${SILHOUETTE_WEB_PORT:-38173}:80"
+

@@ -1,0 +1,4 @@
+include LICENSE
+include README.md
+recursive-include ddoc/fonts *
+recursive-include ddoc/config *.json

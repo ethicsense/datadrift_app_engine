@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        # Default: text,timeseries,audio-wave,audio-midi,vision-image,vision-video
+        # yolo/vis는 무거우므로 필요 시 여기서 추가
+        # NOTE: text/vision 플러그인은 clip을 git URL로 설치하므로, api 이미지에 git이 필요합니다.
+        DDOC_PLUGINS: "text,timeseries,audio-wave,audio-midi,vision-image,vision-video,mlflow-log"
+    ports:
+      - "18765:18765"
+    environment:
+      - DRIFT_STUDIO_DATA_DIR=storage/datasets
+    # volumes:
+    #   - ./storage:/repo/apps/api/storage
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_BACKEND=/api
+      # Docker 컨테이너 내부에서 api 컨테이너로 프록시
+      - VITE_API_PROXY_TARGET=http://api:18765
+      - VITE_WS_PROXY_TARGET=ws://api:18765
+    depends_on:
+      - api
+
+# NOTE:
+# - 모달리티별 플러그인은 `DDOC_PLUGINS` build-arg로 선택 설치합니다.
+
+

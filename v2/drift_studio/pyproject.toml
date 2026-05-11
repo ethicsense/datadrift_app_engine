@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drift-studio"
+version = "0.1.0"
+description = "EDA → Drift → Report for multi-modality datasets (server + web)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "bhc" }]
+
+dependencies = [
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+api = [
+  "fastapi",
+  "uvicorn",
+  "python-multipart",
+  "sqlalchemy",
+  "jinja2",
+  "pyyaml>=6.0.0,<7.0.0",
+  "weasyprint>=62.0,<63.0",
+  "pydyf<0.11",
+]
+native-runtime = [
+  "fastapi",
+  "uvicorn",
+  "python-multipart",
+  "sqlalchemy",
+  "jinja2",
+  "pydantic>=2.7",
+  "pyyaml>=6.0.0,<7.0.0",
+  "weasyprint>=62.0,<63.0",
+  "pydyf<0.11",
+]
+native-plugins-default = [
+  # docker-compose 기본 플러그인(text,timeseries,audio-wave,audio-midi) 실행에 필요한 주요 의존성
+  "numpy",
+  "pandas",
+  "scipy",
+  "librosa>=0.10.0",
+  "statsmodels>=0.13.0",
+]
+vision = [
+  "pillow>=9.0.0",
+  "numpy",
+  "scipy",
+  "PyWavelets>=1.4.0",
+]
+text = [
+  "pandas",
+  "numpy",
+  "scipy",
+]
+audio = [
+  "numpy",
+  "scipy",
+  "librosa>=0.10.0",
+]
+timeseries = [
+  "pandas",
+  "numpy",
+  "scipy",
+  "statsmodels>=0.13.0",
+]
+all = [
+  # NOTE: PEP 508 상 "자기 자신에 대한 extra 의존"은 설치 도구에 따라 문제가 될 수 있어
+  # all extra는 명시적으로 펼쳐서 정의합니다.
+  "fastapi",
+  "uvicorn",
+  "python-multipart",
+  "sqlalchemy",
+  "jinja2",
+  "typer>=0.12",
+  "rich>=13.7",
+  "pillow>=9.0.0",
+  "pandas",
+  "numpy",
+  "scipy",
+  "PyWavelets>=1.4.0",
+  "librosa>=0.10.0",
+  "statsmodels>=0.13.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "packages"}
+packages = {find = {where = ["packages"], include = ["driftstudio_*", "driftstudio*"]}}
