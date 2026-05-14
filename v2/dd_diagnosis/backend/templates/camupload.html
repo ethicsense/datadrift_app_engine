@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C.A.M Visualization Upload</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .form-container { padding: 20px; }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+        }
+        .settings-row { display: none; }
+        .btn-brown {
+            background-color: #FF6B00;
+            border-color: #FF6B00;
+            color: white;
+        }
+        .btn-brown:hover {
+            background-color: #FF8C00;
+            border-color: #FF8C00;
+            color: white;
+        }
+        .btn-brown:focus {
+            background-color: #FF6B00;
+            border-color: #FF6B00;
+            color: white;
+            box-shadow: 0 0 0 0.25rem rgba(255, 107, 0, 0.25);
+        }
+        .project-card {
+            border: 2px solid transparent;
+            transition: border-color 0.3s ease, transform 0.2s, box-shadow 0.2s;
+        }
+        .project-card.selected {
+            border-color: #198754;
+            box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+        }
+        .help-icon {
+            color: #6c757d;
+            cursor: help;
+            margin-left: 5px;
+            font-size: 14px;
+        }
+        .help-icon:hover {
+            color: #495057;
+        }
+        .section-description {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+        .input-group-text {
+            background-color: #e9ecef;
+            border-color: #ced4da;
+        }
+        .help-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+            font-style: italic;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .custom-arrow {
+            stroke-width: 4;
+            stroke: currentColor;
+            fill: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5 mb-5" style="padding-bottom: 100px;">
+        
+        <!-- 뒤로가기 버튼 -->
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="goBack()" style="width: 70px; height: 70px; border-radius: 50%; padding: 0;">
+                <svg width="32" height="32" viewBox="0 0 24 24" class="custom-arrow">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <h1 class="page-title text-center">C.A.M Visualization Tool</h1>
+        
+        <!-- 모델 설정 행 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Model Configuration</h5>
+                <div class="section-description">
+                    <small>CAM 시각화를 위한 YOLO 모델을 설정하세요. 사전 훈련된 모델을 로드하고 환경을 구성합니다.</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 첫 번째 줄 -->
+                <div class="row align-items-end mb-4">
+                    <!-- 모델 선택 -->
+                    <div class="col">
+                        <label for="modelSelect" class="form-label">
+                            Select Model
+                        </label>
+                        <select class="form-select" id="modelSelect" required>
+                            <option value="">Choose a model...</option>
+                            {% for model in models %}
+                            <option value="{{ model }}">{{ model }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="help-text">CAM 시각화를 위해 models 디렉토리에서 YOLO 모델(.pt 파일)을 선택하세요</div>
+                    </div>
+
+                    <!-- GPU 사용 여부 -->
+                    <div class="col">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="useGpu">
+                            <label class="form-check-label" for="useGpu">
+                                Use GPU
+                            </label>
+                        </div>
+                        <div class="help-text">더 빠른 처리를 위해 GPU 가속을 활성화합니다 (CUDA 호환 GPU 필요)</div>
+                    </div>
+
+                    <!-- 레이어 수 표시 -->
+                    <div class="col text-center">
+                        <button type="button" class="btn btn-info me-2" onclick="visualizeModel()" id="visualizeButton" style="display: none;">
+                            Model Architecture
+                        </button>
+                        <div class="help-text" id="visualizeHelpText" style="display: none;">새 탭에서 Netron을 열어 모델 아키텍처를 시각화합니다</div>
+                    </div>
+
+                    <!-- Load Model 버튼 -->
+                    <div class="col d-flex justify-content-end">
+                        <button type="button" class="btn btn-brown" onclick="loadModel()">
+                            Load Model
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- Load Model 버튼 아래 help-text -->
+                <div class="row mt-2">
+                    <div class="col d-flex justify-content-end">
+                        <div class="help-text">선택된 모델을 메모리에 로드하고 총 레이어 수를 표시합니다</div>
+                    </div>
+                </div>
+
+                <!-- 두 번째 줄 -->
+                <div class="row align-items-end mt-2">
+
+                    <!-- Target Layer -->
+                    <div class="col-2">
+                        <label class="form-label">
+                            Total Layers
+                        </label>
+                        <span id="layerCount" class="form-control bg-light" style="font-size: 1rem;">
+                            -
+                        </span>
+                        <div class="help-text">로드된 모델의 레이어 수 (로드 후 표시됨)</div>
+                    </div>
+
+                    <!-- 패딩 컬럼 -->
+                    <div class="col-2"></div>
+
+                    <!-- Input Type 선택 -->
+                    <div class="col-auto">
+                        <label class="form-label">
+                            Input Type
+                        </label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="inputType" id="typeImage" value="image" checked>
+                            <label class="btn btn-outline-primary" for="typeImage">Image</label>
+
+                            <input type="radio" class="btn-check" name="inputType" id="typeText" value="text">
+                            <label class="btn btn-outline-primary" for="typeText">Text</label>
+                        </div>
+                        <div class="help-text">CAM 시각화를 위해 이미지 파일 또는 CSV 텍스트 데이터 중 선택하세요</div>
+                    </div>
+
+                    <!-- 모델 업로드 버튼 -->
+                    <div class="col d-flex justify-content-end">
+                        <button type="button" class="btn btn-brown" onclick="showSettings()">
+                            Configure Input
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Configure Input 버튼 아래 help-text -->
+                <div class="row mt-2">
+                    <div class="col d-flex justify-content-end">
+                        <div class="help-text">선택한 입력 타입에 따라 입력 설정을 구성합니다</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 이미지 설정 행 (기본적으로 숨김) -->
+        <div id="imageSettings" class="card mb-4 settings-row">
+            <div class="card-header">
+                <h5>Image Settings</h5>
+                <div class="section-description">
+                    <small>CAM 시각화를 위한 이미지 처리 옵션을 설정하고 이미지를 업로드하세요. 다양한 이미지 형식을 지원합니다.</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 이미지 업로드 -->
+                    <div class="col-md-6">
+                        <label for="imageUpload" class="form-label">
+                            Upload Images
+                        </label>
+                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required multiple>
+                        <div class="help-text">CAM 시각화를 위해 하나 이상의 이미지 파일(JPG, PNG 등)을 선택하세요. 폴더를 드래그 앤 드롭할 수도 있습니다.</div>
+                        
+                        <!-- 이미지 미리보기 영역 -->
+                        <div id="imagePreviewContainer" class="mt-3">
+                            <div class="row" id="previewRow">
+                                <!-- 미리보기 이미지들이 여기에 동적으로 추가됨 -->
+                            </div>
+                        </div>
+                    </div>
+        
+                    <!-- 이미지 설정 -->
+                    <div class="col-md-6">
+                        <div class="row align-items-center">
+                            <!-- Task 선택 -->
+                            <div class="col-12 mb-3">
+                                <label class="form-label">
+                                    Task
+                                </label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="task" id="taskCls" value="cls">
+                                    <label class="btn btn-outline-primary" for="taskCls">Classification</label>
+        
+                                    <input type="radio" class="btn-check" name="task" id="taskOd" value="od" checked>
+                                    <label class="btn btn-outline-primary" for="taskOd">Object Detection</label>
+        
+                                    <input type="radio" class="btn-check" name="task" id="taskSeg" value="seg">
+                                    <label class="btn btn-outline-primary" for="taskSeg">Segmentation</label>
+                                </div>
+                                <div class="help-text">CAM 시각화를 위한 컴퓨터 비전 작업 유형을 선택하세요</div>
+                            </div>
+        
+                            <!-- 스위치 설정 -->
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="useGrayscale">
+                                    <label class="form-check-label" for="useGrayscale">
+                                        Grayscale
+                                    </label>
+                                </div>
+                                <div class="help-text mb-4">처리 전에 이미지를 그레이스케일로 변환하여 흑백 CAM 시각화를 수행합니다</div>
+                                
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="useRgb">
+                                    <label class="form-check-label" for="useRgb">
+                                        Heatmap Inversion
+                                    </label>
+                                </div>
+                                <div class="help-text mb-4">더 나은 시각화 대비를 위해 히트맵 색상을 반전시킵니다</div>
+                            </div>
+
+                            <!-- 간격 추가 -->
+                            <div class="col-12 mb-3"></div>
+                            <div class="col-12 mb-3"></div>
+
+                            <div class="col-12">
+                                <label for="projectName" class="form-label">
+                                    Project Name
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="projectName" 
+                                       placeholder="Enter project name" required>
+                                <div class="help-text">CAM 시각화 프로젝트의 고유한 이름을 입력하세요. 모든 결과를 저장할 폴더가 생성됩니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Run 버튼 -->
+                <div class="d-flex justify-content-end mt-4">
+                    <div>
+                        <button type="button" class="btn btn-warning btn-lg px-5 py-3"
+                                style="width: 170px; font-size: 1.5rem;"
+                                onclick="runCam()">
+                            <i class="bi bi-play-fill fs-4"></i> Run
+                        </button>
+                        <div class="help-text">업로드된 이미지와 현재 설정으로 CAM 시각화 처리를 시작합니다</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 텍스트 설정 행 (기본적으로 숨김) -->
+        <div id="textSettings" class="card mb-4 settings-row">
+    <div class="card-header">
+        <h5>CSV Data Settings</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <!-- CSV 파일 업로드 -->
+                <div class="mb-3">
+                    <label for="csvUpload" class="form-label">Upload CSV File</label>
+                    <input type="file" class="form-control" id="csvUpload" 
+                           accept=".csv" required>
+                    <div class="form-text">Please upload a CSV file containing your text data</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <!-- Target Column 설정 -->
+                <div class="mb-3">
+                    <label for="targetColumn" class="form-label">Target Column</label>
+                    <input type="text" class="form-control" id="targetColumn" 
+                           placeholder="Enter column name" required>
+                    <div class="form-text">Specify the column name containing target text data</div>
+                </div>
+                <!-- CSV 미리보기 -->
+                <div class="mb-3">
+                    <label class="form-label">Preview</label>
+                    <div id="csvPreview" class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                        <small class="text-muted">CSV preview will appear here</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- 기존 프로젝트 목록 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Existing Projects</h5>
+            <div class="section-description">
+                <small>이전에 생성된 CAM 시각화 프로젝트를 찾아보고 로드하세요. 프로젝트 카드를 클릭하여 선택할 수 있습니다.</small>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="projectList" class="row">
+                <!-- 프로젝트 목록이 여기에 동적으로 로드됨 -->
+            </div>
+            
+            <!-- Load Project 버튼 -->
+            <div class="d-flex justify-content-end mt-4">
+                <div>
+                    <button type="button" class="btn btn-success btn-lg px-4 py-3"
+                            style="width: 170px; font-size: 1.2rem;"
+                            onclick="loadSelectedProject()"
+                            id="loadProjectBtn"
+                            disabled>
+                        <i class="bi bi-folder-open"></i> Load Project
+                    </button>
+                    <div class="help-text">선택된 프로젝트를 로드하여 CAM 시각화 결과를 확인합니다</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 이미지 미리보기 관련 스타일
+        const previewStyles = `
+            .preview-container {
+                position: relative;
+                margin: 5px;
+                display: inline-block;
+            }
+            .preview-image {
+                max-width: 150px;
+                max-height: 150px;
+                object-fit: cover;
+                border-radius: 4px;
+            }
+            .remove-preview {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                background: red;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                text-align: center;
+                line-height: 20px;
+                cursor: pointer;
+            }
+        `;
+
+        // 스타일 추가
+        const styleSheet = document.createElement("style");
+        styleSheet.textContent = previewStyles;
+        document.head.appendChild(styleSheet);
+
+        // 입력 타입에 따른 설정 표시
+        function showSettings() {
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            document.getElementById('imageSettings').style.display = inputType === 'image' ? 'block' : 'none';
+            document.getElementById('textSettings').style.display = inputType === 'text' ? 'block' : 'none';
+        }
+
+        // 이미지 업로드 처리
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const previewContainer = document.getElementById('previewRow');
+            const files = e.target.files;
+            
+            // 기존 미리보기 초기화
+            previewContainer.innerHTML = '';
+            
+            // 각 파일에 대한 미리보기 생성
+            Array.from(files).forEach((file, index) => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        const previewDiv = document.createElement('div');
+                        previewDiv.className = 'col-md-3 preview-container';
+                        previewDiv.innerHTML = `
+                            <img src="${e.target.result}" class="preview-image" alt="Preview ${index + 1}">
+                            <span class="remove-preview" onclick="removePreview(this)">×</span>
+                        `;
+                        previewContainer.appendChild(previewDiv);
+                    }
+                    
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        // 미리보기 제거 함수
+        function removePreview(element) {
+            element.parentElement.remove();
+        }
+
+        // 폴더 업로드 지원을 위한 드래그 앤 드롭 이벤트 처리
+        const dropZone = document.getElementById('imagePreviewContainer');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            
+            const items = e.dataTransfer.items;
+            const files = [];
+            
+            // 드롭된 항목 처리
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.kind === 'file') {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry.isDirectory) {
+                        // 디렉토리 처리
+                        processDirectory(entry, files);
+                    } else {
+                        // 파일 처리
+                        const file = item.getAsFile();
+                        if (file.type.startsWith('image/')) {
+                            files.push(file);
+                        }
+                    }
+                }
+            }
+            
+            // 파일 목록 업데이트
+            const dataTransfer = new DataTransfer();
+            files.forEach(file => dataTransfer.items.add(file));
+            document.getElementById('imageUpload').files = dataTransfer.files;
+            
+            // 미리보기 업데이트
+            const event = new Event('change');
+            document.getElementById('imageUpload').dispatchEvent(event);
+        });
+
+        // 디렉토리 처리 함수
+        function processDirectory(entry, files) {
+            const reader = entry.createReader();
+            
+            reader.readEntries((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isDirectory) {
+                        processDirectory(entry, files);
+                    } else {
+                        entry.file((file) => {
+                            if (file.type.startsWith('image/')) {
+                                files.push(file);
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        // 폼 제출
+        function submitForms() {
+            const formData = new FormData();
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            
+            // 공통 설정
+            formData.append('model', document.getElementById('modelSelect').value);
+            formData.append('useGpu', document.getElementById('useGpu').checked);
+            formData.append('inputType', inputType);
+
+            if (inputType === 'image') {
+                // 이미지 설정
+                const imageFile = document.getElementById('imageUpload').files[0];
+                formData.append('image', imageFile);
+                formData.append('useGrayscale', document.getElementById('useGrayscale').checked);
+                formData.append('useRgb', document.getElementById('useRgb').checked);
+                formData.append('task', document.querySelector('input[name="task"]:checked').value);
+            } else {
+                // 텍스트 설정
+                formData.append('text', document.getElementById('inputText').value);
+            }
+
+            // API 호출
+            fetch('upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    window.location.href = 'analyze';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while uploading');
+            });
+        }
+
+        function loadModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const useGpu = document.getElementById('useGpu').checked;
+            const layerCountElement = document.getElementById('layerCount');
+            const visualizeButton = document.getElementById('visualizeButton');
+            const visualizeHelpText = document.getElementById('visualizeHelpText');
+            
+            // 모델이 선택되지 않은 경우 처리
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            // 로딩 상태 표시
+            layerCountElement.textContent = 'Loading...';
+            visualizeButton.style.display = 'none';  // 버튼 숨기기
+            visualizeHelpText.style.display = 'none';  // help-text 숨기기
+            
+            // 백엔드 API 호출
+            fetch('/api/model/load', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName,
+                    use_gpu: useGpu
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    layerCountElement.textContent = 'Error';
+                    alert('Error: ' + data.error);
+                } else {
+                    // 레이어 수 업데이트
+                    layerCountElement.textContent = `Layers: ${data.layer_count}`;
+                    visualizeButton.style.display = 'inline-block';  // 버튼 표시
+                    visualizeHelpText.style.display = 'block';  // help-text 표시
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                layerCountElement.textContent = 'Error';
+                alert('Failed to load model');
+            });
+        }
+
+        function visualizeModel() {
+            const modelName = document.getElementById('modelSelect').value;
+            const visualizeButton = document.getElementById('visualizeButton');
+            
+            // 모델이 선택되지 않은 경우 처리
+            if (!modelName) {
+                alert('Please select a model first');
+                return;
+            }
+            
+            // 버튼 비활성화
+            visualizeButton.disabled = true;
+            
+            // 백엔드 API 호출
+            fetch('/api/model/visualize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model_name: modelName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    // 새 창에서 netron 시각화 열기
+                    window.open(data.url, '_blank');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to visualize model');
+            })
+            .finally(() => {
+                // 1초 후 버튼 다시 활성화
+                setTimeout(() => {
+                    visualizeButton.disabled = false;
+                }, 1000);
+            });
+        }
+
+        function runCam() {
+            const formData = new FormData();
+            const inputType = document.querySelector('input[name="inputType"]:checked').value;
+            
+            // 필수 입력 확인
+            const modelSelect = document.getElementById('modelSelect');
+            if (!modelSelect.value) {
+                alert('Please select a model first');
+                return;
+            }
+
+            // 프로젝트 이름 확인
+            const projectName = document.getElementById('projectName').value.trim();
+            if (!projectName) {
+                alert('Please enter a project name');
+                return;
+            }
+
+            // 프로젝트 이름 중복 확인
+            checkProjectExists(projectName).then(exists => {
+                if (exists) {
+                    alert('This project name already exists. Please choose a different name.');
+                    return;
+                }
+                
+                // 중복이 없으면 CAM 처리 진행
+                proceedWithCamProcessing(formData, inputType, projectName);
+            });
+        }
+
+        function proceedWithCamProcessing(formData, inputType, projectName) {
+            // 공통 설정
+            formData.append('model', document.getElementById('modelSelect').value);
+            formData.append('useGpu', document.getElementById('useGpu').checked);
+            formData.append('inputType', inputType);
+            formData.append('projectName', projectName);
+
+            if (inputType === 'image') {
+                // 이미지 설정
+                const imageUpload = document.getElementById('imageUpload');
+                if (!imageUpload.files.length) {
+                    alert('Please upload at least one image');
+                    return;
+                }
+                
+                // 모든 이미지 파일 추가
+                Array.from(imageUpload.files).forEach((file, index) => {
+                    formData.append(`file_${index}`, file);
+                });
+                
+                // 업로드된 이미지 수 추가
+                formData.append('image_count', imageUpload.files.length);
+                formData.append('useGrayscale', document.getElementById('useGrayscale').checked);
+                formData.append('useRgb', document.getElementById('useRgb').checked);
+                formData.append('task', document.querySelector('input[name="task"]:checked').value);
+            } else {
+                // CSV 설정
+                const csvUpload = document.getElementById('csvUpload');
+                const targetColumn = document.getElementById('targetColumn');
+                if (!csvUpload.files[0]) {
+                    alert('Please upload a CSV file');
+                    return;
+                }
+                if (!targetColumn.value) {
+                    alert('Please specify target column');
+                    return;
+                }
+                formData.append('csv', csvUpload.files[0]);
+                formData.append('targetColumn', targetColumn.value);
+            }
+
+            // 로딩 표시
+            const runButton = document.querySelector('button[onclick="runCam()"]');
+            const originalText = runButton.innerHTML;
+            runButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            runButton.disabled = true;
+
+            // API 호출
+            fetch('run_cam', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    const errorMessage = data.error.message || data.error;
+                    const errorDetails = data.error.details ? `\n\nDetails:\n${data.error.details}` : '';
+                    alert(`Error occurred:\n${errorMessage}${errorDetails}`);
+                } else {
+                    // 성공시 결과 페이지로 이동
+                    window.location.href = data.redirect_url;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // 에러 메시지를 사용자 친화적으로 표시
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger alert-dismissible fade show';
+                errorDiv.innerHTML = `
+                    <strong>Error occurred:</strong><br>
+                    ${error.message || 'An unexpected error occurred'}<br>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                
+                // 에러 메시지를 페이지 상단에 삽입
+                const container = document.querySelector('.container');
+                container.insertBefore(errorDiv, container.firstChild);
+                
+                // 5초 후 자동으로 에러 메시지 제거
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            })
+            .finally(() => {
+                // 버튼 상태 복구
+                runButton.innerHTML = originalText;
+                runButton.disabled = false;
+            });
+        }
+
+        // 프로젝트 이름 중복 확인 함수
+        function checkProjectExists(projectName) {
+            return fetch('/api/project/check', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                return data.exists;
+            })
+            .catch(error => {
+                console.error('Error checking project:', error);
+                return false;
+            });
+        }
+
+        // 프로젝트 이름 입력 시 실시간 중복 확인
+        document.getElementById('projectName').addEventListener('input', function() {
+            const projectName = this.value.trim();
+            if (projectName.length > 0) {
+                checkProjectExists(projectName).then(exists => {
+                    if (exists) {
+                        this.style.borderColor = '#dc3545';
+                        this.style.backgroundColor = '#fff5f5';
+                        // 도움말 텍스트 표시
+                        let helpText = this.parentNode.querySelector('.form-text');
+                        if (!helpText) {
+                            helpText = document.createElement('div');
+                            helpText.className = 'form-text text-danger';
+                            this.parentNode.appendChild(helpText);
+                        }
+                        helpText.textContent = 'This project name already exists. Please choose a different name.';
+                    } else {
+                        this.style.borderColor = '#198754';
+                        this.style.backgroundColor = '#f8fff9';
+                        // 도움말 텍스트 제거
+                        const helpText = this.parentNode.querySelector('.form-text.text-danger');
+                        if (helpText) {
+                            helpText.remove();
+                        }
+                    }
+                });
+            } else {
+                // 입력이 없으면 스타일 초기화
+                this.style.borderColor = '';
+                this.style.backgroundColor = '';
+                const helpText = this.parentNode.querySelector('.form-text.text-danger');
+                if (helpText) {
+                    helpText.remove();
+                }
+            }
+        });
+
+        // 기존 프로젝트 목록 로드
+        function loadProjectList() {
+            fetch('/api/project/list')
+                .then(response => response.json())
+                .then(data => {
+                    const projectList = document.getElementById('projectList');
+                    projectList.innerHTML = '';
+                    
+                    if (data.projects.length === 0) {
+                        projectList.innerHTML = '<div class="col-12 text-center text-muted">No existing projects found.</div>';
+                        return;
+                    }
+                    
+                    data.projects.forEach(project => {
+                        const projectCard = document.createElement('div');
+                        projectCard.className = 'col-md-4 mb-3';
+                        projectCard.innerHTML = `
+                            <div class="card h-100 project-card" data-project-name="${project.name}">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">${project.name}</h6>
+                                        <small class="text-muted">${project.image_count} images</small>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                            onclick="event.stopPropagation(); deleteProject('${project.name}')"
+                                            title="Delete project">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        ${project.original_images.slice(0, 3).map(img => `
+                                            <div class="col-4">
+                                                <img src="/static/${img.path}" class="img-fluid rounded" 
+                                                     alt="Original" style="max-height: 80px; object-fit: cover;">
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ${project.original_images.length > 3 ? 
+                                        `<small class="text-muted">+${project.original_images.length - 3} more images</small>` : ''}
+                                </div>
+                            </div>
+                        `;
+                        projectList.appendChild(projectCard);
+                    });
+
+                    // 프로젝트 카드 전체 클릭 이벤트 추가
+                    document.querySelectorAll('.project-card').forEach(card => {
+                        card.addEventListener('click', function(e) {
+                            const projectName = this.getAttribute('data-project-name');
+                            
+                            // 모든 프로젝트 카드에서 selected 클래스 제거
+                            document.querySelectorAll('.project-card').forEach(c => {
+                                c.classList.remove('selected');
+                            });
+                            
+                            // 현재 카드에 selected 클래스 추가
+                            this.classList.add('selected');
+                            
+                            // 선택된 프로젝트 정보를 data 속성으로 저장
+                            document.body.setAttribute('data-selected-project', projectName);
+                            
+                            updateLoadButton();
+                        });
+                        
+                        // 카드에 호버 효과 추가
+                        card.style.cursor = 'pointer';
+                        card.style.transition = 'transform 0.2s, box-shadow 0.2s';
+                        
+                        card.addEventListener('mouseenter', function() {
+                            this.style.transform = 'translateY(-2px)';
+                            this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                        });
+                        
+                        card.addEventListener('mouseleave', function() {
+                            this.style.transform = 'translateY(0)';
+                            this.style.boxShadow = '';
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading projects:', error);
+                    document.getElementById('projectList').innerHTML = 
+                        '<div class="col-12 text-center text-danger">Error loading projects.</div>';
+                });
+        }
+
+        // Load Project 버튼 상태 업데이트
+        function updateLoadButton() {
+            const selectedProject = document.body.getAttribute('data-selected-project');
+            const loadButton = document.getElementById('loadProjectBtn');
+            
+            if (selectedProject) {
+                loadButton.disabled = false;
+                loadButton.textContent = `Load Project: ${selectedProject}`;
+            } else {
+                loadButton.disabled = true;
+                loadButton.innerHTML = '<i class="bi bi-folder-open"></i> Load Project';
+            }
+        }
+
+        // 선택된 프로젝트 로드
+        function loadSelectedProject() {
+            const selectedProject = document.body.getAttribute('data-selected-project');
+            
+            if (!selectedProject) {
+                alert('Please select a project first');
+                return;
+            }
+            
+            loadProject(selectedProject);
+        }
+
+        // 프로젝트 로드
+        function loadProject(projectName) {
+            fetch('/api/project/load', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    window.location.href = data.redirect_url;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading project:', error);
+                alert('Failed to load project');
+            });
+        }
+
+        // 프로젝트 삭제 함수
+        function deleteProject(projectName) {
+            if (!confirm(`Are you sure you want to delete project "${projectName}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            fetch('/api/project/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    project_name: projectName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                alert('Project deleted successfully!');
+                loadProjectList(); // 프로젝트 목록 새로고침
+            })
+            .catch(error => {
+                console.error('Error deleting project:', error);
+                alert('Failed to delete project: ' + error.message);
+            });
+        }
+
+        // 페이지 로드 시 프로젝트 목록 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjectList();
+        });
+
+        // 뒤로가기 함수
+        function goBack() {
+            // 홈 페이지로 이동
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

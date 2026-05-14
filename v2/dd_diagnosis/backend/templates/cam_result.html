@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAM Visualization Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <style>
+        .result-container {
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .result-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        .detection-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+        }
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .sequence-image {
+            width: 100%;
+            height: auto;
+        }
+        .image-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .layer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .layer-image {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .layer-image:hover {
+            transform: scale(1.05);
+        }
+        .layer-selector {
+            margin-bottom: 15px;
+        }
+        .layer-bar-container {
+            height: 70px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 0;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .layer-bars {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+        }
+        .layer-bar {
+            background-color: #0d6efd;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .layer-bar:hover {
+            background-color: #0b5ed7;
+        }
+        .layer-bar.active {
+            background-color: #198754;
+        }
+        .layer-number {
+            position: absolute;
+            bottom: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #666;
+        }
+        .comparison-image {
+            width: 90%;
+            max-width: 400px;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .comparison-container {
+            margin-top: 20px;
+        }
+        .comparison-container .col-md-6 {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid result-container">
+        <h1 class="text-center mb-4">CAM Visualization Results - {{ project_name }}</h1>
+        <p class="text-center text-muted mb-4" style="font-size: 0.9rem; font-style: italic; margin-top: 0.5rem;">For Data-Drift Management</p>
+        
+        {% if images and images|length > 0 %}
+        <!-- 이미지 선택 탭 -->
+        <ul class="nav nav-tabs mb-4" id="imageTabs" role="tablist">
+            {% for image in images %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if loop.first %}active{% endif %}" 
+                        id="image-{{ loop.index }}-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#image-{{ loop.index }}" 
+                        type="button" 
+                        role="tab">
+                    Image {{ loop.index }}
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <!-- 이미지 결과 컨텐츠 -->
+        <div class="tab-content" id="imageTabsContent">
+            {% for image in images %}
+            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+                 id="image-{{ loop.index }}" 
+                 role="tabpanel">
+                
+                <!-- 첫 번째 카드: 원본 및 인퍼런스 이미지 -->
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#original-{{ loop.index }}">
+                                    Original Image
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#inference-{{ loop.index }}">
+                                    Inference Results
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            <!-- 원본 이미지 -->
+                            <div class="tab-pane fade show active" id="original-{{ loop.index }}">
+                                <img src="{{ url_for('static', filename=image.original_image) }}" 
+                                     class="result-image" alt="Original Image">
+                            </div>
+                            <!-- 추론 결과 -->
+                            <div class="tab-pane fade" id="inference-{{ loop.index }}">
+                                <img src="{{ url_for('static', filename=image.inference_image) }}" 
+                                     class="result-image" alt="Inference Results">
+                                <div class="detection-info">
+                                    <h4>Detection Results:</h4>
+                                    <ul class="list-unstyled">
+                                        {% for detection in image.detection_results %}
+                                        <li class="mb-2">
+                                            <strong>Class:</strong> {{ detection.class_name }}<br>
+                                            <strong>Confidence:</strong> {{ "%.2f"|format(detection.confidence * 100) }}%<br>
+                                            <strong>Bounding Box:</strong> 
+                                            [{{ "%.0f"|format(detection.bbox[0]) }}, 
+                                             {{ "%.0f"|format(detection.bbox[1]) }}, 
+                                             {{ "%.0f"|format(detection.bbox[2]) }}, 
+                                             {{ "%.0f"|format(detection.bbox[3]) }}]
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 두 번째 카드: 레이어 시퀀스 -->
+                <div class="card">
+                    <div class="card-header">
+                        Layer Sequence Visualization
+                    </div>
+                    <div class="card-body">
+                        <img src="{{ url_for('static', filename=image.sequence_image) }}" 
+                             class="sequence-image" alt="Layer Sequence">
+                        <div class="mt-3">
+                            <p class="text-muted">Total Layers: {{ image.total_layers }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 세 번째 카드: 레이어별 CAM 결과 비교 -->
+                <div class="card">
+                    <div class="card-header">
+                        CAM Results Comparison
+                    </div>
+                    <div class="card-body">
+                        <!-- 레이어 선택 바 그래프 -->
+                        <div class="layer-bar-container mb-4">
+                            <div class="layer-bars" id="layerBars">
+                                {% for layer_idx in range(1, images[0].total_layers) %}
+                                <div class="layer-bar"
+                                     data-layer="{{ layer_idx }}"
+                                     onclick="selectLayer('{{ layer_idx }}', '{{ loop.index }}')"
+                                     style="width: calc(40vw / '{{ images[0].total_layers }}'); min-width: 28px; max-width: 48px; height: 40px;"
+                                >
+                                    <span class="layer-number">{{ layer_idx }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- 레이어 CAM 결과 비교 -->
+                        <div class="row comparison-container">
+                            {% for image in images %}
+                            <div class="col-md-{{ 12 // images|length }}">
+                                <h5>Image {{ loop.index }} - Layer <span id="currentLayer{{ loop.index }}">1</span></h5>
+                                <img src="{{ url_for('static', filename='cam_results/' + project_name + '/' + image.file_name + '_layer_1.jpg') }}" 
+                                     class="comparison-image" alt="Layer 1 Image {{ loop.index }}"
+                                     id="layerImage{{ loop.index }}">
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning text-center">
+            No CAM results to display. Please upload and run CAM visualization first.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 업로드 페이지로 돌아가기 버튼 -->
+    <div class="text-center mt-5 mb-4">
+        <a href="{{ url_for('cam_upload') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-arrow-left"></i> Go Back to Upload Page
+        </a>
+    </div>
+
+    <!-- 레이어 상세 보기 모달 -->
+    <div class="modal fade" id="layerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="layerModalTitle"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" id="layerModalImage" class="img-fluid" alt="Layer Detail">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function selectLayer(layerIdx, tabId) {
+            // 현재 탭의 레이어 바만 선택
+            const tabContent = document.getElementById(tabId);
+            if (!tabContent) return;
+
+            // 현재 탭의 레이어 바에서 active 클래스 제거
+            tabContent.querySelectorAll('.layer-bar').forEach(bar => {
+                bar.classList.remove('active');
+            });
+            
+            // 선택된 레이어 바에 active 클래스 추가
+            const selectedBar = tabContent.querySelector(`.layer-bar[data-layer="${layerIdx}"]`);
+            if (selectedBar) {
+                selectedBar.classList.add('active');
+            }
+            
+            // 현재 탭의 이미지들만 업데이트
+            const images = tabContent.querySelectorAll('.comparison-image');
+            images.forEach((image, index) => {
+                const layerSpan = tabContent.querySelector(`#currentLayer${index + 1}`);
+                if (layerSpan) {
+                    layerSpan.textContent = layerIdx;
+                }
+                
+                // 이미지 경로 업데이트 - 프로젝트 이름 포함
+                const currentPath = image.src.split('?')[0];
+                const newPath = currentPath.replace(/_layer_\d+/, `_layer_${layerIdx}`);
+                image.src = `${newPath}?t=${Date.now()}`;
+            });
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 각 탭의 레이어 선택 이벤트 설정
+            document.querySelectorAll('.tab-pane').forEach(tabPane => {
+                const tabId = tabPane.id;
+                const layerBars = tabPane.querySelectorAll('.layer-bar');
+                
+                layerBars.forEach(bar => {
+                    bar.addEventListener('click', function() {
+                        const layerIdx = this.getAttribute('data-layer');
+                        selectLayer(layerIdx, tabId);
+                    });
+                });
+
+                // 첫 번째 레이어 선택
+                selectLayer(1, tabId);
+            });
+
+            // 탭 변경 이벤트 리스너
+            const tabEls = document.querySelectorAll('button[data-bs-toggle="tab"]');
+            tabEls.forEach(tabEl => {
+                tabEl.addEventListener('shown.bs.tab', function (event) {
+                    const targetId = event.target.getAttribute('data-bs-target').substring(1);
+                    // 탭이 변경될 때 해당 탭의 첫 번째 레이어 선택
+                    selectLayer(1, targetId);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

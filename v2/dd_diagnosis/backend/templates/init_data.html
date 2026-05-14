@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Initialization</title>
+    <!-- Bootstrap CSS 추가 -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <style>
+        .upload-status {
+            height: 150px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 1.3em;
+            color: green;
+            margin-top: 0px;
+        }
+        .error {
+            color: red;
+        }
+        
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .list-group {
+            border: 2px solid #000; /* 윤곽선 굵게 */
+            height: 100%; /* 높이 설정 */
+        }
+        .list-group-item {
+            cursor: pointer;
+        }
+        .btn-full-height {
+            height: 100%; /* 버튼 높이 설정 */
+        }
+        .custom-arrow {
+            stroke-width: 4;
+            stroke: currentColor;
+            fill: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- 뒤로가기 버튼 -->
+        <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-lg" onclick="goBack()" style="width: 70px; height: 70px; border-radius: 50%; padding: 0;">
+                <svg width="32" height="32" viewBox="0 0 24 24" class="custom-arrow">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="text-center mb-5">
+            <h1 class="page-title">Data Sampler Tool</h1>
+            <div class="help-text" style="max-width: 800px; margin: 0 auto; color: #6c757d; font-style: italic;">
+                데이터 샘플링을 통해 모델 훈련을 위한 데이터셋을 구성하고 자동화된 훈련 파이프라인을 실행합니다.
+                Reference, Current, Predict 데이터를 업로드하여 통합 데이터셋을 생성할 수 있습니다.
+            </div>
+        </div>
+        <h3 class="mb-4">New Data Upload</h3>
+        <div class="help-text mb-3" style="color: #6c757d; font-style: italic;">
+            새로운 데이터셋을 업로드하고 처리합니다. 각 데이터 타입에 맞는 형식을 선택하여 업로드하세요.
+        </div>
+        <form id="upload-form" action="upload" method="post" enctype="multipart/form-data">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-header text-center">
+                            Reference Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                훈련에 사용된 학습 데이터셋을 업로드하세요
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="ref">Format:</label>
+                                <input type="file" id="ref-upload" name="ref-upload" class="form-control-file" onchange="validateFile(this)">
+                                <select id="ref-format" name="ref-format" class="form-control mt-2">
+                                    <option value="YOLOv5Dataset">YOLOv5Dataset</option>
+                                    <option value="FiftyOneDataset">FiftyOneDataset</option>
+                                    <option value="RawImageData">RawImageData</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-header text-center">
+                            Current Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                최근 새로 수집한 데이터셋을 업로드하세요
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="cur">Format:</label>
+                                <input type="file" id="cur-upload" name="cur-upload" class="form-control-file" onchange="validateFile(this)">
+                                <select id="cur-format" name="cur-format" class="form-control mt-2">
+                                    <option value="YOLOv5Dataset">YOLOv5Dataset</option>
+                                    <option value="FiftyOneDataset">FiftyOneDataset</option>
+                                    <option value="RawImageData">RawImageData</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-header text-center">
+                            Predict Data
+                            <div class="help-text" style="font-size: 0.8rem; margin-top: 5px; color: #6c757d;">
+                                추론하고자 하는 목표 데이터셋을 업로드하세요
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="test">Format:</label>
+                                <input type="file" id="test-upload" name="test-upload" class="form-control-file" onchange="validateFile(this)">
+                                <select id="test-format" name="test-format" class="form-control mt-2">
+                                    <option value="YOLOv5Dataset">YOLOv5Dataset</option>
+                                    <option value="FiftyOneDataset">FiftyOneDataset</option>
+                                    <option value="RawImageData">RawImageData</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-4">
+                <div class="col-md-8">
+                    <div id="status-log" class="upload-status"></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-row">
+                        <div class="col-12">
+                            <input type="text" id="merged-dataset-name" name="merged-dataset-name" placeholder="Enter merged dataset name" class="form-control mb-3">
+                        </div>
+                        <div class="col-12">
+                            <button type="button" class="btn btn-success mb-3 btn-block" 
+                                    style="padding: 15px 0; font-size: 1.2rem; font-weight: 600;" 
+                                    onclick="submitForm()">Process & Load Dataset</button>
+                            <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center;">
+                                업로드된 데이터를 처리하고 통합 데이터셋을 생성합니다
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+        <h3 class="mt-5" style="margin-bottom: 24px;">Built Dataset List</h3>
+        <div class="help-text mb-3" style="color: #6c757d; font-style: italic;">
+            이전에 생성된 데이터셋 목록입니다. 기존 데이터셋을 로드하거나 삭제할 수 있습니다.
+        </div>
+        <form id="load-dataset-form" action="load_existing_dataset" method="post">
+            <div class="form-group">
+                <div class="row">
+                    <div class="col-md-9">
+                        <div id="dataset-list" class="list-group mb-3">
+                            <!-- JavaScript로 데이터셋 목록이 여기에 추가됩니다 -->
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex flex-column">
+                        <button type="button" class="btn btn-warning btn-block flex-grow-1"
+                                style="font-weight: 600;"
+                                onclick="submitLoadForm()">Load Dataset</button>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center; margin-bottom: 10px;">
+                            선택된 데이터셋을 로드합니다
+                        </div>
+                        <button type="button" class="btn btn-danger btn-block flex-grow-1"
+                                style="font-weight: 600;"
+                                onclick="deleteDataset()">Delete Dataset</button>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: center;">
+                            선택된 데이터셋을 삭제합니다
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" id="selected-dataset" name="saved-datasets">
+            </div>
+        </form>
+    </div>
+
+    <!-- Bootstrap JS 및 jQuery 추가 -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('get_existing_datasets')
+                .then(response => response.json())
+                .then(datasets => {
+                    const listGroup = document.getElementById('dataset-list');
+                    datasets.forEach(dataset => {
+                        const item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'list-group-item list-group-item-action';
+                        item.textContent = dataset;
+                        item.onclick = function() {
+                            document.querySelectorAll('.list-group-item').forEach(el => el.classList.remove('active'));
+                            item.classList.add('active');
+                            document.getElementById('selected-dataset').value = dataset;
+                        };
+                        listGroup.appendChild(item);
+                    });
+                })
+                .catch(error => console.error('Error fetching datasets:', error));
+        });
+
+        function submitLoadForm() {
+            const selected = document.querySelector('.list-group-item.active');
+            if (selected) {
+                document.getElementById('load-dataset-form').submit();
+            } else {
+                alert('Please select a dataset to load.');
+            }
+        }
+
+        function submitForm() {
+            document.getElementById('upload-form').submit();
+        }
+
+        function validateFile(input) {
+            const file = input.files[0];
+            const statusLog = document.getElementById('status-log');
+            if (file && !file.name.endsWith('.zip')) {
+                const message = `Invalid file selected: ${file.name}. Only .zip files are allowed.`;
+                statusLog.innerHTML += `<div class="error">${message}</div>`;
+                input.value = ''; // 선택된 파일 초기화
+            } else if (file) {
+                const message = `File selected: ${file.name}`;
+                statusLog.innerHTML += `<div>${message}</div>`;
+            }
+            statusLog.scrollTop = statusLog.scrollHeight; // 스크롤을 맨 아래로 이동
+        }
+
+        function deleteDataset() {
+            const selected = document.querySelector('.list-group-item.active');
+            if (selected) {
+                const datasetName = document.getElementById('selected-dataset').value;
+                
+                // 삭제 확인 팝업
+                if (!confirm(`Are you sure you want to delete the dataset "${datasetName}"?\n\nThis action cannot be undone.`)) {
+                    return;
+                }
+                
+                // 로딩 표시
+                const deleteBtn = document.querySelector('button[onclick="deleteDataset()"]');
+                const originalText = deleteBtn.innerHTML;
+                deleteBtn.innerHTML = '<i class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i> Deleting...';
+                deleteBtn.disabled = true;
+                
+                fetch(`delete_dataset`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ dataset_name: datasetName })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 성공 팝업 표시
+                    if (data.message) {
+                        // 성공 메시지를 팝업으로 표시
+                        const successMessage = data.message.replace(/\n/g, "\n");
+                        alert(`Dataset deleted successfully!\n\n${successMessage}`);
+                        
+                        // 목록에서 삭제
+                        selected.remove();
+                        
+                        // 선택 상태 초기화
+                        document.getElementById('selected-dataset').value = '';
+                        
+                        // status-log에도 기록
+                        document.getElementById('status-log').innerHTML += `<div class="success">Dataset "${datasetName}" deleted successfully</div>`;
+                    } else {
+                        alert('Dataset deleted successfully!');
+                        selected.remove();
+                        document.getElementById('selected-dataset').value = '';
+                        document.getElementById('status-log').innerHTML += `<div class="success">Dataset "${datasetName}" deleted successfully</div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting dataset:', error);
+                    alert('Error deleting dataset. Please try again.');
+                })
+                .finally(() => {
+                    // 버튼 상태 복원
+                    deleteBtn.innerHTML = originalText;
+                    deleteBtn.disabled = false;
+                });
+            } else {
+                alert('Please select a dataset to delete.');
+            }
+        }
+
+        // 뒤로가기 함수
+        function goBack() {
+            // 홈 페이지로 이동
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
