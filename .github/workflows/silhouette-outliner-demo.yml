@@ -1,0 +1,97 @@
+name: Silhouette Outliner Demo Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "demo-v*"
+
+permissions:
+  contents: write
+
+env:
+  PROJECT_DIR: v2/silhouette_outliner
+  PYTHON_VERSION: "3.12"
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/v2/silhouette_outliner/packaging/playwright-browsers
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,packaging]"
+          playwright install chromium
+
+      - name: Build package
+        run: pyinstaller packaging/silhouette_outliner.spec --noconfirm
+
+      - name: Create zip archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/SilhouetteOutliner -DestinationPath SilhouetteOutliner-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silhouette-outliner-windows-x64
+          path: ${{ env.PROJECT_DIR }}/SilhouetteOutliner-win-x64.zip
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,packaging]"
+          playwright install chromium
+
+      - name: Build package
+        run: pyinstaller packaging/silhouette_outliner.spec --noconfirm
+
+      - name: Create zip archive
+        run: |
+          cd dist
+          zip -r ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silhouette-outliner-macos
+          path: ${{ env.PROJECT_DIR }}/SilhouetteOutliner-macos.zip
+
+  release:
+    name: Publish demo release
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/demo-v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/silhouette-outliner-windows-x64/SilhouetteOutliner-win-x64.zip
+            artifacts/silhouette-outliner-macos/SilhouetteOutliner-macos.zip
