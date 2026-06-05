@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
+import os
 
 from silhouette_outliner.config import default_collect_config_path
-from silhouette_outliner.runtime_paths import bundled_config_path, configs_dir, is_frozen
+from silhouette_outliner.runtime_paths import (
+    bundled_browsers_dir,
+    bundled_config_path,
+    configs_dir,
+    configure_playwright_browsers,
+    is_frozen,
+)
 
 
 def test_bundled_config_path_points_to_periodic_multag() -> None:
@@ -19,3 +25,12 @@ def test_default_collect_config_matches_preset_file() -> None:
 
 def test_is_frozen_false_in_dev() -> None:
     assert is_frozen() is False
+
+
+def test_configure_playwright_browsers_is_noop_in_dev() -> None:
+    before = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    configure_playwright_browsers()
+    after = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    # Dev runs must not override the developer's default Playwright cache.
+    assert before == after
+    assert bundled_browsers_dir() is None

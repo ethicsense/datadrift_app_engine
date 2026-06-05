@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 _APP_DIR_NAME = "SilhouetteOutliner"
+_BROWSERS_DIR_NAME = "playwright-browsers"
 
 
 def is_frozen() -> bool:
@@ -48,9 +50,32 @@ def bundled_config_path(filename: str) -> Path:
     return configs_dir() / filename
 
 
+def _browser_dir_candidates() -> Iterator[Path]:
+    """Locations where the bundled Playwright browsers may live (frozen build)."""
+    yield bundle_root() / _BROWSERS_DIR_NAME
+    if is_frozen():
+        exe_dir = Path(sys.executable).resolve().parent
+        yield exe_dir / _BROWSERS_DIR_NAME
+        # macOS .app: Contents/MacOS/<exe> -> Contents/Frameworks/playwright-browsers
+        yield exe_dir.parent / "Frameworks" / _BROWSERS_DIR_NAME
+        yield exe_dir.parent / "Resources" / _BROWSERS_DIR_NAME
+
+
+def bundled_browsers_dir() -> Path | None:
+    for candidate in _browser_dir_candidates():
+        if candidate.is_dir() and any(candidate.iterdir()):
+            return candidate
+    return None
+
+
 def configure_playwright_browsers() -> None:
+    """Point Playwright at the Chromium bundled inside the packaged app.
+
+    Does nothing in dev runs, where the developer's standard Playwright
+    installation (default cache) is used as-is.
+    """
     if not is_frozen():
         return
-    browser_dir = bundle_root() / "playwright-browsers"
-    if browser_dir.is_dir():
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browser_dir)
+    bundled = bundled_browsers_dir()
+    if bundled is not None:
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bundled)

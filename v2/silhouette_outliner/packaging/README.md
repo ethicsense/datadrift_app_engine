@@ -61,5 +61,14 @@ pyinstaller packaging/silhouette_outliner.spec --noconfirm
 
 - GUI 앱 (`Silhouette Outliner`)
 - `configs/periodic-multag.json` (전체 분석 프리셋)
-- Playwright Chromium (CI 빌드 시 번들)
-- 분석 시 **네트워크 연결 필요**
+- **Playwright Chromium 번들 포함 (Windows·macOS 공통)** — 앱에 동봉되므로 별도 브라우저 설치가 필요 없습니다.
+- 분석 시 **네트워크 연결 필요** (데이터 수집 대상 사이트 접근용)
+
+### Chromium 동봉 방식 (빌드 관점)
+
+수집은 Playwright(Chromium)로 페이지를 직접 열어 네트워크 JSON·DOM을 가져오는 구조이며, 패키지에는 항상 Chromium이 포함됩니다.
+
+- **Windows:** PyInstaller `datas`로 번들 → `_internal/playwright-browsers/`
+- **macOS:** PyInstaller가 Chromium의 중첩 `.app/.framework`를 per-binary로 코드사인하려다 실패(`bundle format unrecognized`)하므로, **빌드 후** CI가 Chromium을 `Silhouette Outliner.app/Contents/Frameworks/playwright-browsers/`로 복사하고 번들 전체를 `codesign --deep`로 한 번에 ad-hoc 서명합니다.
+
+런타임에서는 `runtime_paths.configure_playwright_browsers()`가 동봉된 Chromium 경로를 `PLAYWRIGHT_BROWSERS_PATH`로 지정합니다. 다운로드나 API 폴백 같은 동작 변경은 없습니다.

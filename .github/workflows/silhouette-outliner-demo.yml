@@ -67,12 +67,26 @@ jobs:
           playwright install chromium
 
       - name: Build package
+        # Chromium is intentionally NOT in PyInstaller datas on macOS so that
+        # PyInstaller never runs its per-binary codesign on the Chromium .app.
         run: pyinstaller packaging/silhouette_outliner.spec --noconfirm
+
+      - name: Bundle Chromium into app and ad-hoc sign
+        run: |
+          set -euo pipefail
+          APP="dist/Silhouette Outliner.app"
+          DEST="$APP/Contents/Frameworks/playwright-browsers"
+          mkdir -p "$DEST"
+          cp -R "$PLAYWRIGHT_BROWSERS_PATH/." "$DEST/"
+          # Single real codesign pass over the whole bundle (handles nested
+          # Chromium .app/.framework correctly, unlike PyInstaller's signer).
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP" || echo "::warning::ad-hoc signature verify reported issues (demo build)"
 
       - name: Create zip archive
         run: |
           cd dist
-          zip -r ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app"
+          zip -ry ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app"
 
       - uses: actions/upload-artifact@v4
         with:
