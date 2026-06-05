@@ -24,7 +24,14 @@ datas: list[tuple[str, str]] = [
     (str(CONFIGS), "configs"),
     (str(TEMPLATES), os.path.join("silhouette_outliner", "templates")),
 ]
-if PLAYWRIGHT_BROWSERS.is_dir():
+# Chromium is bundled on every platform, but the mechanism differs:
+#   - Windows: added to PyInstaller datas here (no codesign step involved).
+#   - macOS:   intentionally NOT added here, because PyInstaller's per-binary
+#              codesign pass cannot handle Chromium's nested .app/.framework
+#              ("bundle format unrecognized"). Instead the CI workflow copies
+#              Chromium into Contents/Frameworks/playwright-browsers after the
+#              build and performs one real `codesign --deep` pass on the bundle.
+if sys.platform == "win32" and PLAYWRIGHT_BROWSERS.is_dir():
     datas.append((str(PLAYWRIGHT_BROWSERS), "playwright-browsers"))
 
 hiddenimports = collect_submodules("silhouette_outliner")
@@ -91,4 +98,5 @@ if sys.platform == "darwin":
         name="Silhouette Outliner.app",
         icon=None,
         bundle_identifier="com.datadrift.silhouette-outliner",
+        codesign_identity=None,
     )
