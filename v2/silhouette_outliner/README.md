@@ -64,7 +64,7 @@ OS별 설치형 데모 패키지는 **GitHub Actions**로 빌드합니다. 로�
 
 **Actions에서 수동 실행:** GitHub → Actions → *Silhouette Outliner Demo Package* → Run workflow → Artifacts 다운로드
 
-**태그 릴리스:** `git tag demo-v0.1.0 && git push origin demo-v0.1.0`
+**태그 실행(Artifacts 생성):** `git tag demo-v0.1.0 && git push origin demo-v0.1.0`
 
 ## 실행
 

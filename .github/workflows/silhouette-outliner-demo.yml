@@ -7,7 +7,7 @@ on:
       - "demo-v*"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PROJECT_DIR: v2/silhouette_outliner
@@ -79,19 +79,3 @@ jobs:
           name: silhouette-outliner-macos
           path: ${{ env.PROJECT_DIR }}/SilhouetteOutliner-macos.zip
 
-  release:
-    name: Publish demo release
-    needs: [build-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/demo-v')
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            artifacts/silhouette-outliner-windows-x64/SilhouetteOutliner-win-x64.zip
-            artifacts/silhouette-outliner-macos/SilhouetteOutliner-macos.zip

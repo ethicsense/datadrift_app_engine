@@ -10,7 +10,8 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-ROOT = Path(SPECPATH).resolve().parent.parent
+SPEC_FILE = Path(__file__).resolve()
+ROOT = SPEC_FILE.parent.parent
 SRC = ROOT / "src"
 ENTRY = SRC / "silhouette_outliner" / "gui" / "app.py"
 CONFIGS = ROOT / "configs"

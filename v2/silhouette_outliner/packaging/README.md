@@ -16,14 +16,14 @@ Windows·macOS 설치형 데모 패키지는 **GitHub Actions**에서 OS별로 �
    - `silhouette-outliner-windows-x64`
    - `silhouette-outliner-macos`
 
-### 2. 태그로 실행 (데모 릴리스용)
+### 2. 태그로 실행 (Artifacts 생성용)
 
 ```bash
 git tag demo-v0.1.0
 git push origin demo-v0.1.0
 ```
 
-`demo-v*` 태그 push 시 동일 워크플로가 실행되고, 성공 시 GitHub Release에 자동 업로드됩니다.
+`demo-v*` 태그 push 시 동일 워크플로가 실행되고, 성공 시 Actions Artifacts만 생성됩니다.
 
 ## OS별 테스트
 
