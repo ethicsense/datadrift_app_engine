@@ -77,7 +77,12 @@ jobs:
           APP="dist/Silhouette Outliner.app"
           DEST="$APP/Contents/Frameworks/playwright-browsers"
           mkdir -p "$DEST"
-          cp -R "$PLAYWRIGHT_BROWSERS_PATH/." "$DEST/"
+          # Copy the browser payload but EXCLUDE Playwright's `.links` hardlink
+          # registry: codesign --deep treats it as a malformed nested bundle
+          # ("bundle format unrecognized"). `.links` is only an install-time
+          # dedup store; the chromium-<rev> dir is self-contained at runtime.
+          # rsync without -H dereferences hardlinks into real copies.
+          rsync -a --exclude='.links' "$PLAYWRIGHT_BROWSERS_PATH/" "$DEST/"
           # Single real codesign pass over the whole bundle (handles nested
           # Chromium .app/.framework correctly, unlike PyInstaller's signer).
           codesign --force --deep --sign - "$APP"

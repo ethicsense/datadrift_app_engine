@@ -11,9 +11,13 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # SPECPATH = directory containing this .spec (…/packaging). PyInstaller exec() has no __file__.
-ROOT = Path(SPECPATH).resolve().parent
+PACKAGING = Path(SPECPATH).resolve()
+ROOT = PACKAGING.parent
 SRC = ROOT / "src"
-ENTRY = SRC / "silhouette_outliner" / "gui" / "app.py"
+# Use a thin launcher with absolute imports as the entry point. Running
+# gui/app.py directly would execute it as __main__ and break its relative
+# imports ("attempted relative import with no known parent package").
+ENTRY = PACKAGING / "launcher.py"
 if not ENTRY.is_file():
     raise SystemExit(f"Entry script not found: {ENTRY}\n  SPECPATH={SPECPATH!r}\n  ROOT={ROOT}")
 CONFIGS = ROOT / "configs"
