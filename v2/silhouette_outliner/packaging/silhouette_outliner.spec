@@ -10,10 +10,12 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-SPEC_FILE = Path(__file__).resolve()
-ROOT = SPEC_FILE.parent.parent
+# SPECPATH = directory containing this .spec (…/packaging). PyInstaller exec() has no __file__.
+ROOT = Path(SPECPATH).resolve().parent
 SRC = ROOT / "src"
 ENTRY = SRC / "silhouette_outliner" / "gui" / "app.py"
+if not ENTRY.is_file():
+    raise SystemExit(f"Entry script not found: {ENTRY}\n  SPECPATH={SPECPATH!r}\n  ROOT={ROOT}")
 CONFIGS = ROOT / "configs"
 TEMPLATES = SRC / "silhouette_outliner" / "templates"
 PLAYWRIGHT_BROWSERS = ROOT / "packaging" / "playwright-browsers"
