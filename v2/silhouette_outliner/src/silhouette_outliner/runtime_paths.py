@@ -79,3 +79,27 @@ def configure_playwright_browsers() -> None:
     bundled = bundled_browsers_dir()
     if bundled is not None:
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bundled)
+
+
+def configure_tls() -> None:
+    """Make stdlib urllib trust certifi's CA bundle in the packaged app.
+
+    Frozen builds (PyInstaller) do not ship the OpenSSL default CA paths, so
+    HTTPS via urllib fails with CERTIFICATE_VERIFY_FAILED. That silently forces
+    the slow Playwright fallback for every page. Pointing SSL_CERT_FILE at the
+    bundled certifi cacert.pem restores the fast client-api collection path.
+
+    No-op in dev runs, where the interpreter already has working CA paths.
+    """
+    if not is_frozen():
+        return
+    if os.environ.get("SSL_CERT_FILE"):
+        return
+    try:
+        import certifi
+    except Exception:
+        return
+    cacert = certifi.where()
+    if cacert and Path(cacert).is_file():
+        os.environ["SSL_CERT_FILE"] = cacert
+        os.environ.setdefault("SSL_CERT_DIR", str(Path(cacert).parent))

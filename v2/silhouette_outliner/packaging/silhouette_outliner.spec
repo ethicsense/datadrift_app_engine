@@ -39,7 +39,9 @@ if sys.platform == "win32" and PLAYWRIGHT_BROWSERS.is_dir():
     datas.append((str(PLAYWRIGHT_BROWSERS), "playwright-browsers"))
 
 hiddenimports = collect_submodules("silhouette_outliner")
-for pkg in ("PySide6", "playwright", "jinja2"):
+# certifi: ensures cacert.pem is bundled so urllib HTTPS (fast client-api path)
+# works in the frozen app instead of falling back to slow Playwright collection.
+for pkg in ("PySide6", "playwright", "jinja2", "certifi"):
     try:
         _pkg_datas, _pkg_binaries, _pkg_hidden = collect_all(pkg)
         datas.extend(_pkg_datas)

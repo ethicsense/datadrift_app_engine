@@ -90,8 +90,9 @@ jobs:
 
       - name: Create zip archive
         run: |
+          cp packaging/macos-실행방법.txt dist/
           cd dist
-          zip -ry ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app"
+          zip -ry ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app" macos-실행방법.txt
 
       - uses: actions/upload-artifact@v4
         with:

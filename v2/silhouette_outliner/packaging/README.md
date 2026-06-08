@@ -30,7 +30,7 @@ git push origin demo-v0.1.0
 | OS | 받은 파일 | 테스트 방법 |
 |----|-----------|-------------|
 | **Windows** | `SilhouetteOutliner-win-x64.zip` | 압축 해제 → `SilhouetteOutliner/SilhouetteOutliner.exe` 실행 |
-| **macOS** | `Silhouette Outliner-macos.zip` | 압축 해제 → `Silhouette Outliner.app` 실행 (우클릭 → 열기) |
+| **macOS** | `SilhouetteOutliner-macos.zip` | 압축 해제 → **`macos-실행방법.txt`** 참고 후 `Silhouette Outliner.app` 실행 |
 
 보고서·실행 결과는 사용자 데이터 폴더에 저장됩니다.
 
@@ -39,8 +39,11 @@ git push origin demo-v0.1.0
 
 ### 보안 안내 (데모용, 서명 없음)
 
-- **macOS:** Gatekeeper 경고 시 **우클릭 → 열기** 또는 시스템 설정에서 허용
-- **Windows:** SmartScreen 경고 시 **추가 정보 → 실행**
+- **Windows:** SmartScreen "신뢰할 수 없음" 경고 시 **추가 정보 → 실행** (일반적으로 바로 실행 가능)
+- **macOS:** Apple 서명·공증이 없어 Gatekeeper 경고가 표시됩니다. zip 안의 **[macos-실행방법.txt](macos-실행방법.txt)** 를 따라 주세요.
+  - **권장:** `xattr -dr com.apple.quarantine "/경로/Silhouette Outliner.app"`
+  - **대안:** 시스템 설정 → 개인정보 보호 및 보안 → **그래도 열기**
+  - macOS 15(Sequoia) 이상에서는 우클릭 → 열기만으로는 허용되지 않을 수 있습니다.
 
 ## 로컬 빌드 (선택)
 

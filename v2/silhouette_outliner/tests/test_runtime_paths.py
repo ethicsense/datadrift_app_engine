@@ -8,6 +8,7 @@ from silhouette_outliner.runtime_paths import (
     bundled_config_path,
     configs_dir,
     configure_playwright_browsers,
+    configure_tls,
     is_frozen,
 )
 
@@ -34,3 +35,11 @@ def test_configure_playwright_browsers_is_noop_in_dev() -> None:
     # Dev runs must not override the developer's default Playwright cache.
     assert before == after
     assert bundled_browsers_dir() is None
+
+
+def test_configure_tls_is_noop_in_dev() -> None:
+    before = os.environ.get("SSL_CERT_FILE")
+    configure_tls()
+    after = os.environ.get("SSL_CERT_FILE")
+    # Dev runs already have working CA paths; must not be mutated.
+    assert before == after

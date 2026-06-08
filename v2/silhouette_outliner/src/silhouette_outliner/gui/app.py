@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..runtime_paths import configure_playwright_browsers, runs_root
+from ..runtime_paths import configure_playwright_browsers, configure_tls, runs_root
 from .network import check_online
 from .worker import CollectWorker
 
@@ -369,6 +369,7 @@ class MainWindow(QMainWindow):
 
 
 def main() -> None:
+    configure_tls()
     configure_playwright_browsers()
     app = QApplication(sys.argv)
     app.setApplicationName("Silhouette Outliner")
