@@ -1,2 +1,0 @@
-# Silhouette analytics package
-

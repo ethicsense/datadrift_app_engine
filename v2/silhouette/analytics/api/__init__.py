@@ -1,1 +1,0 @@
-"""FastAPI visualization API package."""
