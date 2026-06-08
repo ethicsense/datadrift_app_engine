@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Model</title>
+    <!-- Bootstrap CSS 추가 -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/common.css') }}" rel="stylesheet">
+    <style>
+        .train-container {
+            margin-top: 50px;
+        }
+        .table-container {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+        .dataset-table, .model-table {
+            width: 100%;
+        }
+        .train-button, .tensorboard-button, .download-button {
+            font-size: 18px;
+            padding: 10px 20px;
+            margin-top: 10px;
+        }
+        .download-button-container {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 0px;
+            padding-bottom: 20px;
+        }
+        #log {
+            width: 100%;
+            height: 200px;
+            overflow-y: auto;
+            border: 3px solid #ccc;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 20px 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .parameter-container {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .parameter-form {
+            flex-grow: 1;
+        }
+        .parameter-form .form-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .parameter-form label {
+            flex: 0 0 120px;
+            margin-bottom: 0;
+        }
+        .parameter-form input {
+            flex: 1.5;
+        }
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: flex-end;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container train-container">
+        <h1 class="page-title text-center">Adaptive Trainer</h1>
+        <p class="text-center text-muted mb-4" style="font-size: 0.9rem; font-style: italic; margin-top: 0.5rem;">For Data-Drift Management</p>
+        <div class="help-text text-center mb-4" style="color: #6c757d; font-style: italic; max-width: 800px; margin: 0 auto;">
+            샘플링된 데이터셋을 사용하여 모델을 훈련합니다.<br>데이터셋과 모델을 선택하고 
+            훈련 파라미터를 설정하여 자동화된 모델 훈련을 수행할 수 있습니다.
+        </div>
+        <form action="train" method="post">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="help-text mb-2" style="color: #6c757d; font-style: italic;">
+                        훈련에 사용할 데이터셋을 선택하세요.<br>Data Sampler에서 내보낸 데이터셋이 표시됩니다.
+                    </div>
+                    <table class="table table-bordered dataset-table">
+                        <thead class="thead-light">
+                            <tr>
+                                <th colspan="2" class="text-center">Dataset Selection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dataset in datasets %}
+                            <tr>
+                                <td><input type="radio" name="selected_dataset" value="{{ dataset }}"></td>
+                                <td>{{ dataset }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <div class="help-text mb-2" style="color: #6c757d; font-style: italic;">
+                        훈련할 모델을 선택하세요.<br>다양한 크기와 성능의 모델 중에서 선택할 수 있습니다.
+                    </div>
+                    <table class="table table-bordered model-table">
+                        <thead class="thead-light">
+                            <tr>
+                                <th colspan="2" class="text-center">Model Selection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for model in models %}
+                            <tr>
+                                <td><input type="radio" name="selected_model" value="{{ model }}"></td>
+                                <td>{{ model }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="parameter-container">
+                <div class="row w-100">
+                    <div class="col">
+                        <h3>Training<br>Parameters</h3>
+                        <div class="help-text mb-3" style="color: #6c757d; font-style: italic;">
+                            모델 훈련에 필요한 파라미터를 설정하세요.<br><br>프로젝트명, 실행명, 에포크 수, 배치 크기,<br>
+                            이미지 크기, 학습률 등을 조정할 수 있습니다.
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="parameter-form">
+                            <div class="form-group">
+                                <label for="project">Project Name:</label>
+                                <input type="text" class="form-control" id="project" name="project" value="{{ project or 'runs' }}" placeholder="Enter project name">
+                            </div>
+                            <div class="form-group">
+                                <label for="name">Run Name:</label>
+                                <input type="text" class="form-control" id="name" name="name" value="{{ name or 'exp' }}" placeholder="Enter run name">
+                            </div>
+                            <div class="form-group">
+                                <label for="epochs">Epochs:</label>
+                                <input type="number" class="form-control" id="epochs" name="epochs" value="{{ epochs or 100 }}" min="1" max="1000">
+                            </div>
+                            <div class="form-group">
+                                <label for="batch_size">Batch Size:</label>
+                                <input type="number" class="form-control" id="batch_size" name="batch_size" value="{{ batch_size or 16 }}" min="1" max="128">
+                            </div>
+                            <div class="form-group">
+                                <label for="img_size">Image Size:</label>
+                                <input type="number" class="form-control" id="img_size" name="img_size" value="{{ img_size or 640 }}" min="320" max="1280" step="32">
+                            </div>
+                            <div class="form-group">
+                                <label for="learning_rate">Learning Rate:</label>
+                                <input type="number" class="form-control" id="learning_rate" name="learning_rate" value="{{ learning_rate or 0.001 }}" min="0.0001" max="0.1" step="0.0001">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col button-container ml-auto">
+                        <button type="submit" class="btn btn-success train-button">Train Start</button>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: right; margin-top: 5px;">
+                            선택된 설정으로 모델 훈련을 시작합니다
+                        </div>
+                        <a href="http://localhost:6006" target="_blank" class="btn btn-primary tensorboard-button">Train Monitor</a>
+                        <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: right; margin-top: 5px;">
+                            TensorBoard에서 실시간 훈련 진행 상황을 모니터링합니다
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+        
+        <div class="help-text mb-2" style="color: #6c757d; font-style: italic;">
+            훈련 진행 상황과 로그가 실시간으로 표시됩니다. 훈련 중 발생하는 정보와 오류를 확인할 수 있습니다.
+        </div>
+        <div id="log" class="mt-4"></div>
+        <div class="download-button-container">
+            <div class="help-text" style="font-size: 0.8rem; color: #6c757d; text-align: right; margin-right: 10px;">
+                훈련이 완료된 모델 파일을 다운로드합니다
+            </div>
+            <a href="download_model" class="btn btn-warning download-button" style="font-weight: 600;">Model Download</a>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS 및 jQuery 추가 -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const socket = io();
+
+            socket.on('connect', function() {
+                console.log("Socket Connected.");
+            
+                socket.on('tensorboard_ready', function(data) {
+                    console.log("Received 'tensorboard_ready' event:", data);
+                    if (data.status === 'ready') {
+                        const tensorboardIframe = document.getElementById('tensorboard-iframe');
+                        tensorboardIframe.src = "http://localhost:6006";
+                    }
+                });
+            });
+        });
+
+        function fetchLogs() {
+            const eventSource = new EventSource('stream_logs');
+            const logElement = document.getElementById('log');
+            const maxMessages = 100; // 최대 메시지 수 설정
+            let messages = [];
+            
+            eventSource.onmessage = function(event) {
+                messages.push(event.data);
+                
+                if (messages.length > maxMessages) {
+                    messages = messages.slice(-maxMessages);
+                }
+                
+                logElement.innerHTML = messages.join('<br>');
+                logElement.scrollTop = logElement.scrollHeight;
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('EventSource failed:', error);
+                eventSource.close();
+            };
+        }
+
+        window.onload = fetchLogs;
+    </script>
+</body>
+</html>

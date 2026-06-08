@@ -1,0 +1,21 @@
+{
+  "sections": [
+    { "label": "전체", "section_id": "199" }
+  ],
+  "categories": [
+    { "label": "상의", "code": "001000", "parent_label": "의류" }
+  ],
+  "ranking_windows": [
+    {
+      "id": "rt",
+      "label": "실시간",
+      "query_params": { "period": "REALTIME" }
+    }
+  ],
+  "store_code": "musinsa",
+  "gender_filter": "A",
+  "age_band": "AGE_BAND_ALL",
+  "sub_pan": "product",
+  "limit": 100,
+  "request_delay_seconds": 0.4
+}

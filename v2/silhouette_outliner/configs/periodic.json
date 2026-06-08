@@ -1,0 +1,19 @@
+{
+  "sections": [
+    { "label": "전체", "section_id": "199" }
+  ],
+  "categories": [
+    { "label": "상의", "code": "001000", "parent_label": "의류" }
+  ],
+  "ranking_windows": [
+    { "id": "1d", "label": "일간", "days": 1, "query_params": { "period": "DAILY" } },
+    { "id": "1w", "label": "주간", "days": 7, "query_params": { "period": "WEEKLY" } },
+    { "id": "1m", "label": "월간", "days": 30, "query_params": { "period": "MONTHLY" } }
+  ],
+  "store_code": "musinsa",
+  "gender_filter": "A",
+  "age_band": "AGE_BAND_ALL",
+  "sub_pan": "product",
+  "limit": 100,
+  "request_delay_seconds": 0.4
+}

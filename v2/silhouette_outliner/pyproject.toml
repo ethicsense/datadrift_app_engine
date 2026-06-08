@@ -1,0 +1,38 @@
+[project]
+name = "silhouette-outliner"
+version = "0.1.0"
+description = "One-shot fashion ranking collector and static HTML report generator."
+requires-python = ">=3.11"
+dependencies = [
+  "jinja2>=3.1.4,<4",
+  "playwright>=1.56.0",
+  "certifi>=2024.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+gui = [
+  "PySide6>=6.6,<7",
+]
+packaging = [
+  "pyinstaller>=6.10,<7",
+]
+
+[project.scripts]
+silhouette-outliner = "silhouette_outliner.cli:main"
+silhouette-outliner-gui = "silhouette_outliner.gui.app:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+silhouette_outliner = ["templates/*.j2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

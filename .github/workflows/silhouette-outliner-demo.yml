@@ -1,0 +1,101 @@
+name: Silhouette Outliner Demo Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "demo-v*"
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_DIR: v2/silhouette_outliner
+  PYTHON_VERSION: "3.12"
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/v2/silhouette_outliner/packaging/playwright-browsers
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,packaging]"
+          playwright install chromium
+
+      - name: Build package
+        run: pyinstaller packaging/silhouette_outliner.spec --noconfirm
+
+      - name: Create zip archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/SilhouetteOutliner -DestinationPath SilhouetteOutliner-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silhouette-outliner-windows-x64
+          path: ${{ env.PROJECT_DIR }}/SilhouetteOutliner-win-x64.zip
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,packaging]"
+          playwright install chromium
+
+      - name: Build package
+        # Chromium is intentionally NOT in PyInstaller datas on macOS so that
+        # PyInstaller never runs its per-binary codesign on the Chromium .app.
+        run: pyinstaller packaging/silhouette_outliner.spec --noconfirm
+
+      - name: Bundle Chromium into app and ad-hoc sign
+        run: |
+          set -euo pipefail
+          APP="dist/Silhouette Outliner.app"
+          DEST="$APP/Contents/Frameworks/playwright-browsers"
+          mkdir -p "$DEST"
+          # Copy the browser payload but EXCLUDE Playwright's `.links` hardlink
+          # registry: codesign --deep treats it as a malformed nested bundle
+          # ("bundle format unrecognized"). `.links` is only an install-time
+          # dedup store; the chromium-<rev> dir is self-contained at runtime.
+          # rsync without -H dereferences hardlinks into real copies.
+          rsync -a --exclude='.links' "$PLAYWRIGHT_BROWSERS_PATH/" "$DEST/"
+          # Single real codesign pass over the whole bundle (handles nested
+          # Chromium .app/.framework correctly, unlike PyInstaller's signer).
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP" || echo "::warning::ad-hoc signature verify reported issues (demo build)"
+
+      - name: Create zip archive
+        run: |
+          cp packaging/macos-실행방법.txt dist/
+          cd dist
+          zip -ry ../SilhouetteOutliner-macos.zip "Silhouette Outliner.app" macos-실행방법.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silhouette-outliner-macos
+          path: ${{ env.PROJECT_DIR }}/SilhouetteOutliner-macos.zip
+

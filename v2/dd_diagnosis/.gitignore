@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+ENV/
+
+# OS
+.DS_Store
+
+# Runtime / local data (created by app)
+backend/db/
+backend/datasets/
+backend/logs/
+backend/models/
+backend/static/cam_results/
+backend/static/perturbation_results/

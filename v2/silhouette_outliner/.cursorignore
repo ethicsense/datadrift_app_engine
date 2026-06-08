@@ -1,0 +1,41 @@
+# Data & Storage (가장 중요)
+*.csv
+*.json
+*.parquet
+*.sql
+*.log
+data/
+outputs/
+storage/
+## -- exceptions -- ##
+!configs/periodic.json
+!configs/periodic-multag.json
+
+# logs, tmp files
+ref.html
+
+# Python & FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+.env
+.pytest_cache/
+
+# React & Node
+node_modules/
+build/
+dist/
+.eslintcache
+
+# Docker & Infrastructure
+.dockerignore
+docker-compose.override.yml
+*.db
+*.sqlite3
+
+# Vector DB (로컬 저장 시)
+chroma/
+faiss/
+qdrant_data/

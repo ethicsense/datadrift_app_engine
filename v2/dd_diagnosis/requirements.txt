@@ -1,0 +1,27 @@
+# DD Diagnosis web stack — v1 ddoc와 동일 계열.
+# CLIP은 PyPI 패키지명이 겹치므로 OpenAI 저장소에서 설치:
+#   pip install git+https://github.com/openai/CLIP.git
+
+Flask>=3.0.0
+flask-cors>=4.0.0
+Flask-SocketIO>=5.3.0
+fiftyone>=0.20.0
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+pymilvus>=2.3.0
+opencv-python>=4.5.0
+Pillow>=9.0.0
+numpy>=1.21.0
+tqdm>=4.60.0
+matplotlib>=3.5.0
+plotly>=5.0.0
+netron>=7.0.0
+psutil>=5.9.0
+scikit-learn>=1.0.0
+scikit-image>=0.19.0
+scipy>=1.7.0
+pandas>=1.3.0
+tensorboard>=2.14.0
+tensorflow>=2.14.0
+tensorboardX>=2.6.0
