@@ -2,3 +2,15 @@ node_modules
 dist
 .DS_Store
 *.local
+.venv
+__pycache__
+*.pyc
+.ipynb_checkpoints
+notebooks/data
+notebooks/.ipynb_checkpoints
+
+# Kaggle credentials (never commit)
+.kaggle/
+**/kaggle.json
+**/access_token
+kaggle.json
