@@ -7,7 +7,13 @@ from typing import Iterable
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
+from IPython.display import Markdown, display
 from matplotlib import font_manager
+
+
+def chart_note(md: str) -> None:
+    """Render interpretation text in the same output stream as the following plot."""
+    display(Markdown(md.strip()))
 
 
 def configure_matplotlib() -> str:
