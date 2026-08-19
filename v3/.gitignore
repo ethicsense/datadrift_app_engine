@@ -14,3 +14,7 @@ notebooks/.ipynb_checkpoints
 **/kaggle.json
 **/access_token
 kaggle.json
+
+# cursor rules
+.cursor/
+**/*.plan.md
