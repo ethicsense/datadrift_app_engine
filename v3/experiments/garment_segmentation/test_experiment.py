@@ -20,7 +20,7 @@ from io_utils import mask_from_box, rle_decode, rle_encode, restore_mask
 from licenses import license_record
 from resolver import point_in_mask, score_proposals, select_with_resolver, target_hit, torso_prior_score
 from report import collect_detection_failures
-from run import resolve_run_dir
+from run import infer_model, resolve_run_dir
 from schema import validate_proposal, validate_proposals
 
 
@@ -290,6 +290,42 @@ def test_reviewer_kappa() -> None:
     assert result["n"] == 4
     assert result["kappa"] is not None
     assert 0.0 <= result["kappa"] <= 1.0
+
+
+def test_infer_model_checkpoints_and_resumes(tmp_path: Path) -> None:
+    images = tmp_path / "images"
+    images.mkdir()
+    items = []
+    for i in range(5):
+        path = images / f"{i}.png"
+        Image.new("RGB", (32, 32), color=(i * 40, 80, 120)).save(path)
+        items.append({"item_id": f"id{i}", "split": "primary", "image_path": str(path)})
+    cache_dir = tmp_path / "proposals" / "dummy"
+    adapter = DummySegmentor()
+    adapter.load()
+    ctx = AdapterContext(prompts=["top"], box_threshold=0.25, text_threshold=0.25, mask_threshold=0.5, max_proposals=4)
+
+    # Seed a partial checkpoint as if a previous run stopped early.
+    partial = cache_dir / "proposals.jsonl"
+    partial.parent.mkdir(parents=True)
+    partial.write_text(
+        json.dumps({"item_id": "id0", "split": "primary", "proposals": [], "proposal_count": 0, "failed": False})
+        + "\n"
+        + json.dumps({"item_id": "id1", "split": "primary", "proposals": [], "proposal_count": 0, "failed": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    by_item, meta, rows = infer_model(adapter, items, context=ctx, cache_dir=cache_dir, reuse=False)
+    assert meta["status"] == "complete"
+    assert meta["cached_items"] == 5
+    assert len(rows) == 5
+    assert set(by_item) == {f"id{i}" for i in range(5)}
+    on_disk = [json.loads(line) for line in partial.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert [row["item_id"] for row in on_disk] == [f"id{i}" for i in range(5)]
+    progress = json.loads((cache_dir / "progress.json").read_text(encoding="utf-8"))
+    assert progress["status"] == "complete"
+    assert progress["done"] == 5
+    assert progress["total"] == 5
 
 
 if __name__ == "__main__":

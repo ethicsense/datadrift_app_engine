@@ -9,11 +9,15 @@ __pycache__
 notebooks/data
 notebooks/.ipynb_checkpoints
 artifacts/
-experiments/attribute_embedding/config.yaml
-experiments/garment_segmentation/config.yaml
-experiments/garment_segmentation/config.sam.yaml
-experiments/garment_segmentation/config.preprocess.yaml
-experiments/garment_segmentation/config.preprocess.sam3.yaml
+# Local experiment configs (track only *.example.yaml)
+experiments/**/config.yaml
+experiments/**/config.sam*.yaml
+experiments/**/config.preprocess*.yaml
+!experiments/**/config.example.yaml
+!experiments/**/config.sam.example.yaml
+!experiments/**/config.preprocess.example.yaml
+!experiments/**/config.preprocess.soft_sweep.example.yaml
+!experiments/**/config.preprocess.soft_consistency.example.yaml
 
 # Kaggle credentials (never commit)
 .kaggle/
