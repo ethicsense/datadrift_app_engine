@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import signal
 import subprocess
 import sys
 import time
@@ -155,6 +156,36 @@ def load_reviews(path: Path | None) -> list[dict[str, Any]]:
         return list(csv.DictReader(handle))
 
 
+def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+        handle.flush()
+
+
+def _write_infer_progress(
+    path: Path,
+    *,
+    status: str,
+    done: int,
+    total: int,
+    last_item_id: str | None,
+    adapter_key: str,
+) -> None:
+    write_json(
+        path,
+        {
+            "status": status,
+            "adapter": adapter_key,
+            "done": done,
+            "total": total,
+            "remaining": max(total - done, 0),
+            "last_item_id": last_item_id,
+            "updated_at": datetime.now(UTC).isoformat(),
+        },
+    )
+
+
 def infer_model(
     adapter,
     items: list[dict[str, Any]],
@@ -163,34 +194,116 @@ def infer_model(
     cache_dir: Path,
     reuse: bool,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any], list[dict[str, Any]]]:
+    """Run adapter inference with incremental proposal checkpoints.
+
+    Each finished item is appended to ``proposals.jsonl`` immediately and
+    ``progress.json`` is updated so interrupt/kill (after the current item)
+    still leaves recoverable, countable progress. Partial caches are resumed
+    automatically; ``reuse=True`` skips inference when a cache already exists.
+    """
     cache_path = cache_dir / "proposals.jsonl"
     meta_path = cache_dir / "metadata.json"
+    progress_path = cache_dir / "progress.json"
+    total = len(items)
+
     if reuse and cache_path.exists():
         cached = read_jsonl(cache_path)
         by_item = {row["item_id"]: row.get("proposals") or [] for row in cached}
         timing = [row for row in cached]
         meta = read_json(meta_path) if meta_path.exists() else adapter.metadata()
+        _write_infer_progress(
+            progress_path,
+            status="reused",
+            done=len(timing),
+            total=total,
+            last_item_id=timing[-1]["item_id"] if timing else None,
+            adapter_key=adapter.key,
+        )
         return by_item, meta, timing
 
-    by_item: dict[str, list[dict[str, Any]]] = {}
     timing_rows: list[dict[str, Any]] = []
+    by_item: dict[str, list[dict[str, Any]]] = {}
+    done_ids: set[str] = set()
+    if cache_path.exists():
+        for row in read_jsonl(cache_path):
+            iid = str(row.get("item_id") or "")
+            if not iid or iid in done_ids:
+                continue
+            done_ids.add(iid)
+            timing_rows.append(row)
+            by_item[iid] = row.get("proposals") or []
+        if done_ids:
+            print(f"{adapter.key} resume {len(done_ids)}/{total} from {cache_path}", flush=True)
+
     started = time.perf_counter()
-    for index, item in enumerate(items, 1):
-        t0 = time.perf_counter()
-        failed = False
-        error = None
-        proposals: list[dict[str, Any]] = []
-        try:
-            with Image.open(item["image_path"]) as image:
-                proposals = adapter.infer(image.convert("RGB"), context)
-        except Exception as exc:
-            failed = True
-            error = f"{type(exc).__name__}: {exc}"
-        elapsed = time.perf_counter() - t0
-        by_item[item["item_id"]] = proposals
-        timing_rows.append(
+    interrupted = False
+    last_item_id: str | None = timing_rows[-1]["item_id"] if timing_rows else None
+    previous_handlers: dict[int, Any] = {}
+
+    def _handle_stop(signum: int, _frame: Any) -> None:
+        nonlocal interrupted
+        interrupted = True
+        _write_infer_progress(
+            progress_path,
+            status="interrupted",
+            done=len(timing_rows),
+            total=total,
+            last_item_id=last_item_id,
+            adapter_key=adapter.key,
+        )
+        write_json(
+            meta_path,
             {
-                "item_id": item["item_id"],
+                **adapter.metadata(),
+                "items": total,
+                "cached_items": len(timing_rows),
+                "status": "interrupted",
+                "signal": signum,
+                "wall_sec": round(time.perf_counter() - started, 3),
+                "cold_start_sec": (timing_rows[0].get("latency_sec") if timing_rows else None),
+            },
+        )
+        print(
+            f"{adapter.key} interrupted at {len(timing_rows)}/{total} "
+            f"(saved {cache_path})",
+            flush=True,
+        )
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        previous_handlers[sig] = signal.getsignal(sig)
+        signal.signal(sig, _handle_stop)
+
+    _write_infer_progress(
+        progress_path,
+        status="running",
+        done=len(timing_rows),
+        total=total,
+        last_item_id=last_item_id,
+        adapter_key=adapter.key,
+    )
+
+    try:
+        for index, item in enumerate(items, 1):
+            if interrupted:
+                break
+            iid = str(item["item_id"])
+            if iid in done_ids:
+                if index % 10 == 0 or index == total:
+                    print(f"{adapter.key} {len(timing_rows)}/{total}", flush=True)
+                continue
+            t0 = time.perf_counter()
+            failed = False
+            error = None
+            proposals: list[dict[str, Any]] = []
+            try:
+                with Image.open(item["image_path"]) as image:
+                    proposals = adapter.infer(image.convert("RGB"), context)
+            except Exception as exc:
+                failed = True
+                error = f"{type(exc).__name__}: {exc}"
+            elapsed = time.perf_counter() - t0
+            row = {
+                "item_id": iid,
                 "split": item["split"],
                 "proposals": proposals,
                 "proposal_count": len(proposals),
@@ -199,17 +312,47 @@ def infer_model(
                 "failed": failed,
                 "error": error,
             }
-        )
-        if index % 10 == 0 or index == len(items):
-            print(f"{adapter.key} {index}/{len(items)}", flush=True)
+            by_item[iid] = proposals
+            timing_rows.append(row)
+            done_ids.add(iid)
+            last_item_id = iid
+            _append_jsonl(cache_path, row)
+            if index % 10 == 0 or index == total or len(timing_rows) % 10 == 0:
+                _write_infer_progress(
+                    progress_path,
+                    status="running",
+                    done=len(timing_rows),
+                    total=total,
+                    last_item_id=last_item_id,
+                    adapter_key=adapter.key,
+                )
+                print(f"{adapter.key} {len(timing_rows)}/{total}", flush=True)
+    finally:
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
+
+    status = "interrupted" if interrupted or len(timing_rows) < total else "complete"
     metadata = {
         **adapter.metadata(),
-        "items": len(items),
+        "items": total,
+        "cached_items": len(timing_rows),
+        "status": status,
         "wall_sec": round(time.perf_counter() - started, 3),
-        "cold_start_sec": timing_rows[0]["latency_sec"] if timing_rows else None,
+        "cold_start_sec": (timing_rows[0].get("latency_sec") if timing_rows else None),
     }
-    write_jsonl(cache_path, timing_rows)
     write_json(meta_path, metadata)
+    _write_infer_progress(
+        progress_path,
+        status=status,
+        done=len(timing_rows),
+        total=total,
+        last_item_id=last_item_id,
+        adapter_key=adapter.key,
+    )
+    if interrupted:
+        raise KeyboardInterrupt(
+            f"{adapter.key} stopped after {len(timing_rows)}/{total}; progress saved to {cache_path}"
+        )
     return by_item, metadata, timing_rows
 
 

@@ -222,6 +222,33 @@ def compose_hard(crop_rgb: np.ndarray, crop_mask: np.ndarray, fill: int = 0) -> 
     return Image.fromarray(rgb, mode="RGB")
 
 
+def compose_soft_variant(
+    image: Image.Image,
+    *,
+    box_xyxy: list[float],
+    mask: np.ndarray,
+    pad_ratio: float = 0.12,
+    dilate_px: int = 7,
+    alpha_sigma: float = 5.0,
+    background_blur_sigma: float = 21.0,
+) -> Image.Image:
+    """Crop with pad_ratio then apply soft mask + blurred background (C-style)."""
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    padded = pad_box(box_xyxy, width, height, pad_ratio=pad_ratio)
+    crop = crop_array(rgb, padded)
+    crop_binary = crop_mask(mask, padded)
+    if crop_binary.shape[:2] != crop.shape[:2]:
+        crop_binary = np.ones(crop.shape[:2], dtype=bool)
+    return compose_soft(
+        crop,
+        crop_binary,
+        dilate_px=dilate_px,
+        alpha_sigma=alpha_sigma,
+        background_blur_sigma=background_blur_sigma,
+    )
+
+
 def build_arm_images(
     image: Image.Image,
     *,
