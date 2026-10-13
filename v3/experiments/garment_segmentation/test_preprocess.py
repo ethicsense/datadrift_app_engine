@@ -16,6 +16,7 @@ from preprocess import (
     build_arm_images,
     compose_hard,
     compose_soft,
+    compose_soft_variant,
     is_garment_label,
     pad_box,
     resolve_arms,
@@ -110,6 +111,18 @@ def test_soft_keeps_background_texture_hard_zeros_it() -> None:
     assert hard[12, 12].tolist() == [200, 20, 20]
     assert soft[0, 0].sum() > 0
     assert not np.array_equal(soft, hard)
+
+
+def test_compose_soft_variant_pad_zero_is_tighter_than_padded() -> None:
+    image = Image.new("RGB", (40, 50), (12, 34, 56))
+    pixels = np.array(image)
+    pixels[8:28, 10:30] = (200, 10, 10)
+    image = Image.fromarray(pixels)
+    mask = np.zeros((50, 40), dtype=bool)
+    mask[8:28, 10:30] = True
+    tight = compose_soft_variant(image, box_xyxy=[10, 8, 30, 28], mask=mask, pad_ratio=0.0)
+    padded = compose_soft_variant(image, box_xyxy=[10, 8, 30, 28], mask=mask, pad_ratio=0.12)
+    assert tight.size[0] * tight.size[1] < padded.size[0] * padded.size[1]
 
 
 def test_build_arm_images_shapes() -> None:
@@ -266,6 +279,7 @@ if __name__ == "__main__":
         test_mask_in_box_ignores_background_and_uses_upper_clothes,
         test_mask_falls_back_to_box_when_no_garment,
         test_soft_keeps_background_texture_hard_zeros_it,
+        test_compose_soft_variant_pad_zero_is_tighter_than_padded,
         test_build_arm_images_shapes,
         test_resolve_arms_orders_and_requires_a,
         test_mask_in_box_accepts_sam3_shirt,

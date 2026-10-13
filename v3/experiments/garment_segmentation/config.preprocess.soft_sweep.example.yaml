@@ -1,0 +1,73 @@
+schema_version: 1
+# Soft-mask pad/blur sweep over attribute_cluster_eval-20261002.
+# Copy to config.preprocess.soft_sweep.yaml (gitignored) if you need local overrides.
+cohort_dir: artifacts/garment_segmentation/attribute_cluster_eval-20261002
+source_bank: sam3_abcd
+output_bank: sam3_soft_sweep
+encoder_id: Marqo/marqo-fashionSigLIP
+device: auto
+batch_size: 8
+seed: 42
+box_model: sam3
+box_resolver: combined
+mask_model: sam3
+mask_resolver: combined
+# Prefer later runs when item_id overlaps.
+sam3_runs:
+  - sam3-mps-450-expanded
+  - sam3-mps-supp211
+  - sam3-mps-expand293-recovered
+  - sam3-mps-topup49
+  - sam3-mps-topup36
+  - sam3-mps-topup28
+preprocess:
+  dilate_px: 7
+  alpha_sigma: 5.0
+  min_mask_fill: 0.08
+  garment_labels:
+    - shirt
+    - hoodie
+    - sweater
+    - blouse
+    - t-shirt
+    - short-sleeve top
+    - long-sleeve top
+    - sweatshirt
+    - sleeveless top
+    - tank top
+    - sports bra
+    - dress
+    - top
+variants:
+  C_0:
+    pad_ratio: 0.12
+    background_blur_sigma: 21.0
+    reuse_from: C
+  C_1:
+    # Both box pad and mask-dilation (blur keep-region) removed.
+    pad_ratio: 0.0
+    dilate_px: 0
+    background_blur_sigma: 21.0
+  C_2:
+    # Crop pad kept; default dilate=7; weaker background blur.
+    pad_ratio: 0.12
+    background_blur_sigma: 8.0
+  C_3:
+    # Crop pad kept; blur-range dilate removed; same blur as C_0.
+    pad_ratio: 0.12
+    dilate_px: 0
+    background_blur_sigma: 21.0
+  C_4:
+    # Like C_3 but blur strength matches C_2.
+    pad_ratio: 0.12
+    dilate_px: 0
+    background_blur_sigma: 8.0
+  C_blur40:
+    # Archived first-sweep "strong blur" arm (formerly named C_3). Keep stem stable.
+    pad_ratio: 0.12
+    dilate_px: 7
+    background_blur_sigma: 40.0
+preview_item_ids:
+  - 3cd64dfc19420475
+  - 7aaccf9badfc256e
+  - cb0571ddec533d9f
